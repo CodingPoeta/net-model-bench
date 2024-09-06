@@ -1,0 +1,19 @@
+syntax = "proto3";
+package proto;
+option go_package = "./blocktransfer";
+
+
+service BlockTransferService {
+  rpc Get (BlockTransferRequest) returns (BlockTransferResponse);
+}
+
+message BlockTransferRequest {
+  string Key = 1;
+  uint32 CMD = 2;
+}
+
+message BlockTransferResponse {
+  uint32 CRCSum = 1;
+  uint32 Size = 2;
+  bytes Body = 3;
+}
