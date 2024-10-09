@@ -5,6 +5,7 @@ require (
 	github.com/juicedata/juicefs v1.1.2
 	github.com/quic-go/quic-go v0.45.1
 	github.com/urfave/cli/v2 v2.25.3
+	github.com/valyala/bytebufferpool v1.0.0
 	github.com/valyala/gorpc v0.0.0-20160519171614-908281bef774
 	google.golang.org/grpc v1.64.0
 	google.golang.org/protobuf v1.34.1

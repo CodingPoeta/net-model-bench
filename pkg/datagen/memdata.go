@@ -10,7 +10,7 @@ type MemData struct {
 	data map[string][]byte
 }
 
-func NewMemData() *MemData {
+func NewMemData() DataGen {
 	buf := make([]byte, 1<<24)
 
 	for i := 0; i < 1<<24; i++ {

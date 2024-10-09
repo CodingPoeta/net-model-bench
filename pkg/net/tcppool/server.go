@@ -4,13 +4,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/codingpoeta/go-demo/common"
-	"github.com/codingpoeta/go-demo/utils"
 	"hash/crc32"
 	"io"
-	"math/rand"
 	"net"
 	"sync"
+
+	"github.com/codingpoeta/go-demo/common"
+	"github.com/codingpoeta/go-demo/utils"
+
+	"github.com/valyala/bytebufferpool"
 )
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
@@ -20,46 +22,50 @@ type response struct {
 	Header [13]byte
 	Err    error
 	tsz    int
-	buf0   [5 << 20]byte
-	buf1   [4 << 20]byte
 }
 
 func (r *response) Write(w io.Writer, comp, crc bool) error {
+	var header [12]byte
+	var buf = bytebufferpool.Get()
+	defer bytebufferpool.Put(buf)
+	//var buf1 = bytebufferpool.Get()
 	if r.Err != nil {
 		msg := r.Err.Error()
-		buf := r.buf0[:12+len(msg)]
-		binary.BigEndian.PutUint32(buf[:4], uint32(len(msg)))
-		binary.BigEndian.PutUint32(buf[4:8], 0)
-		binary.BigEndian.PutUint32(buf[8:12], 0)
-		copy(buf[12:], []byte(msg))
-		_, err := w.Write(buf[:12+len(msg)])
+		binary.BigEndian.PutUint32(header[:4], uint32(len(msg)))
+		binary.BigEndian.PutUint32(header[4:8], 0)
+		binary.BigEndian.PutUint32(header[8:12], 0)
+		_, _ = buf.Write(header[:])
+		_, _ = buf.WriteString(msg)
+		_, err := w.Write(buf.Bytes())
 		return err
 	}
 	if comp {
 		sz := utils.LZ4_compressBound(len(r.Body) + 1)
-		copy(r.buf1[:len(r.Body)], r.Body)
-		r.buf1[0] = utils.Letters[rand.Intn(len(utils.Letters))]
-		buf := r.buf0[:12+sz]
-		compsize := utils.LZ4_compress_default(r.buf1[:len(r.Body)], buf[12:])
-		binary.BigEndian.PutUint32(buf[:4], compsize)
-		binary.BigEndian.PutUint32(buf[4:8], uint32(len(r.Body)))
-		binary.BigEndian.PutUint32(buf[8:12], crc32.Checksum(r.buf1[:len(r.Body)], crcTable))
+		_, _ = buf.Write(make([]byte, 12+sz))
+		//copy(buf1.Bytes()[:len(r.Body)], r.Body)
+		//buf1.Bytes()[0] = utils.Letters[rand.Intn(len(utils.Letters))]
+		compsize := utils.LZ4_compress_default(r.Body, buf.Bytes()[12:])
+		binary.BigEndian.PutUint32(header[:4], compsize)
+		binary.BigEndian.PutUint32(header[4:8], uint32(len(r.Body)))
+		//binary.BigEndian.PutUint32(header[8:12], crc32.Checksum(buf1.Bytes()[:len(r.Body)], crcTable))
+		binary.BigEndian.PutUint32(header[8:12], crc32.Checksum(r.Body, crcTable))
 		// fmt.Printf("compressed size: %d -> %d\n", len(r.Body), sz)
-		// fmt.Println("Header:", buf[:12])
-		_, err := w.Write(buf[:12+compsize])
+		// fmt.Println("Header:", header[:12])
+		copy(buf.Bytes()[:12], header[:])
+		_, err := w.Write(buf.Bytes()[:12+compsize])
 		// _, err := w.Write([]byte("hello"))
 		return err
 	} else {
-		buf := r.buf0[:12+len(r.Body)]
-		binary.BigEndian.PutUint32(buf[:4], 0)
-		binary.BigEndian.PutUint32(buf[4:8], uint32(len(r.Body)))
+		binary.BigEndian.PutUint32(header[:4], 0)
+		binary.BigEndian.PutUint32(header[4:8], uint32(len(r.Body)))
 		if crc {
-			binary.BigEndian.PutUint32(buf[8:12], crc32.Checksum(r.Body, crcTable))
+			binary.BigEndian.PutUint32(header[8:12], crc32.Checksum(r.Body, crcTable))
 		} else {
-			binary.BigEndian.PutUint32(buf[8:12], 0)
+			binary.BigEndian.PutUint32(header[8:12], 0)
 		}
-		copy(buf[12:], r.Body)
-		_, err := w.Write(buf)
+		_, _ = buf.Write(header[:])
+		_, _ = buf.Write(r.Body)
+		_, err := w.Write(buf.Bytes())
 		return err
 	}
 }
