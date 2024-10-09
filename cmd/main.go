@@ -2,9 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/codingpoeta/go-demo/pkg/net/gorpc"
-	"github.com/codingpoeta/go-demo/pkg/net/perf"
-	"github.com/felixge/fgprof"
 	"log"
 	"net/http"
 	"net/http/pprof"
@@ -14,14 +11,19 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/codingpoeta/go-demo/pkg/net/gorpc"
+	"github.com/codingpoeta/go-demo/pkg/net/perf"
+	"github.com/felixge/fgprof"
+
 	"github.com/codingpoeta/go-demo/common"
 	"github.com/codingpoeta/go-demo/pkg/datagen"
 	"github.com/codingpoeta/go-demo/pkg/net/grpc"
 	"github.com/codingpoeta/go-demo/pkg/net/tcppool"
 	"github.com/codingpoeta/go-demo/pkg/net/tcpsendfile"
 
-	"github.com/urfave/cli/v2"
 	_ "net/http/pprof"
+
+	"github.com/urfave/cli/v2"
 )
 
 var debugPort = 6060
@@ -82,7 +84,7 @@ func cmdClient() *cli.Command {
 			var cli common.BlockClient
 			switch c.String("mode") {
 			case "grpc":
-				cli = grpc.NewClient(c.String("addr"), c.Int("threads-per-con"), c.Int("threads"))
+				cli = grpc.NewClient(c.String("addr"), c.Int("threads-per-con"), int(c.Int("threads")/c.Int("threads-per-con")))
 			case "gorpc":
 				cli = gorpc.NewClient(c.String("addr"), c.Int("threads"))
 			case "iorpc": // TODO

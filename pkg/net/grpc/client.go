@@ -2,6 +2,8 @@ package grpc
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -10,6 +12,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+var createClientMutex sync.Mutex
 
 type grpcClient struct {
 	refCnt atomic.Int32
@@ -31,10 +35,17 @@ type client struct {
 }
 
 func (c *client) getGrpcClient() (*grpcClient, error) {
+retry:
 	select {
 	case grpcCli := <-c.grpcClis:
 		return grpcCli, nil
 	default:
+		if createClientMutex.TryLock() {
+			defer createClientMutex.Unlock()
+		} else {
+			goto retry
+		}
+		fmt.Println("new grpc client")
 		conn, err := grpc.Dial(c.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return nil, err
@@ -44,11 +55,9 @@ func (c *client) getGrpcClient() (*grpcClient, error) {
 			cli:  pb.NewBlockTransferServiceClient(conn),
 		}
 		grpcCli.refCnt.Store(int32(c.threadsPerCons))
-		go func() {
-			for i := 1; i < c.threadsPerCons; i++ {
-				c.grpcClis <- grpcCli
-			}
-		}()
+		for i := 1; i < c.threadsPerCons; i++ {
+			c.grpcClis <- grpcCli
+		}
 		return grpcCli, nil
 	}
 }
@@ -98,6 +107,6 @@ func NewClient(addr string, threadsPerCons, cons int) common.BlockClient {
 	return &client{
 		addr:           addr,
 		threadsPerCons: threadsPerCons,
-		grpcClis:       make(chan *grpcClient, cons),
+		grpcClis:       make(chan *grpcClient, cons*threadsPerCons),
 	}
 }

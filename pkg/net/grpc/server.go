@@ -42,8 +42,7 @@ func (s *Server) Get(ctx context.Context, in *pb.BlockTransferRequest) (*pb.Bloc
 		return nil, fmt.Errorf("invalid command")
 	}
 	res.Size = uint32(len(l_buf))
-	copy(l_buf, res.Body)
-	//res.Body = l_buf
+	res.Body = l_buf
 	return res, nil
 }
 
