@@ -121,16 +121,20 @@ func (c *Client) Get(req_ common.Request) (*common.Response, error) {
 	err := c.withConn(func(conn net.Conn) error {
 		req := request{Request: req_, compressOn: c.compressOn, crcOn: c.crcOn}
 		// fmt.Println("CMD:", req.CMD, "Key:", req.Key)
-		if err := req.Write(conn); err != nil {
-			fmt.Println("write error:", err)
-			return err
+		for i := 0; i < req_.Batch; i++ {
+			if err := req.Write(conn); err != nil {
+				fmt.Println("write error:", err)
+				return err
+			}
 		}
-		if err := res.Read(conn); err != nil {
-			fmt.Println("read error:", err)
-			return err
-		} else if res.Err != nil {
-			fmt.Println("response error:", res.Err)
-			return res.Err
+		for i := 0; i < req_.Batch; i++ {
+			if err := res.Read(conn); err != nil {
+				fmt.Println("read error:", err)
+				return err
+			} else if res.Err != nil {
+				fmt.Println("response error:", res.Err)
+				return res.Err
+			}
 		}
 		return nil
 	})

@@ -114,7 +114,7 @@ func cmdClient() *cli.Command {
 					defer wg.Done()
 					for {
 						since := time.Now()
-						res, err := cli.Get(common.Request{CMD: cmd, Key: fmt.Sprint("testkey")})
+						res, err := cli.Get(common.Request{CMD: cmd, Key: fmt.Sprint("testkey"), Batch: c.Int("batch")})
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -185,6 +185,11 @@ func cmdClient() *cli.Command {
 			&cli.IntFlag{
 				Name:  "cmd",
 				Usage: "cmd",
+			},
+			&cli.IntFlag{
+				Name:        "batch",
+				Usage:       "batch",
+				DefaultText: "1",
 			},
 			&cli.StringFlag{
 				Name:  "mode",
