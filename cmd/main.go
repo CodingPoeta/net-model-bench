@@ -4,16 +4,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/http/pprof"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/codingpoeta/go-demo/pkg/net/gorpc"
+	"github.com/codingpoeta/go-demo/pkg/net/jnet"
 	"github.com/codingpoeta/go-demo/pkg/net/perf"
-	"github.com/felixge/fgprof"
 
 	"github.com/codingpoeta/go-demo/common"
 	"github.com/codingpoeta/go-demo/pkg/datagen"
@@ -45,6 +43,8 @@ func cmdServer() *cli.Command {
 				svr, err = tcpsendfile.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
 			case "perf":
 				svr, err = perf.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
+			case "jnet":
+				svr, err = jnet.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
 			case "iorpc":
 			// svr, err = iorpc.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
 			default:
@@ -82,11 +82,17 @@ func cmdClient() *cli.Command {
 		Action: func(c *cli.Context) error {
 			fmt.Println("client")
 			var cli common.BlockClient
+			var err error
 			switch c.String("mode") {
 			case "grpc":
 				cli = grpc.NewClient(c.String("addr"), c.Int("threads-per-con"), int(c.Int("threads")/c.Int("threads-per-con")))
 			case "gorpc":
 				cli = gorpc.NewClient(c.String("addr"), c.Int("threads"))
+			case "jnet":
+				cli, err = jnet.NewClient(c.String("addr"), c.Int("threads"), c.Bool("compress"), c.Bool("crc"))
+				if err != nil {
+					panic(err)
+				}
 			case "iorpc": // TODO
 			case "tcpsendfile":
 				cli = tcpsendfile.NewClient(c.String("addr"), c.Int("threads"))
@@ -198,31 +204,11 @@ func cmdClient() *cli.Command {
 }
 
 func main() {
-	mux := http.NewServeMux()
-	mux.Handle("/debug/fgprof", fgprof.Handler())
-	mux.HandleFunc("/debug/pprof/", pprof.Index)
-	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 	go func() {
 		for debugPort < 6100 {
-			server := http.Server{
-				Addr:    fmt.Sprintf(":%d", debugPort),
-				Handler: mux,
-			}
 			log.Printf("starting debug server on port %d", debugPort)
-			err := server.ListenAndServe()
-			if err != nil {
-				log.Printf("Error in http2 ListenAndServe: %v", err)
-				// if err := server.ListenAndServeTLS("../output/server.crt", "../output/server.key"); err != nil {
-				if strings.Contains(err.Error(), "bind: address already in use") {
-					debugPort++
-					continue
-				}
-			} else {
-				break
-			}
+			http.ListenAndServe(fmt.Sprintf("localhost:%d", debugPort), nil)
+			debugPort++
 		}
 	}()
 
