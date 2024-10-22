@@ -12,6 +12,7 @@ import (
 	"github.com/codingpoeta/go-demo/pkg/net/gorpc"
 	"github.com/codingpoeta/go-demo/pkg/net/jnet"
 	"github.com/codingpoeta/go-demo/pkg/net/perf"
+	"github.com/codingpoeta/go-demo/pkg/net/quic"
 
 	"github.com/codingpoeta/go-demo/common"
 	"github.com/codingpoeta/go-demo/pkg/datagen"
@@ -47,6 +48,8 @@ func cmdServer() *cli.Command {
 				svr, err = jnet.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
 			case "iorpc":
 			// svr, err = iorpc.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
+			case "quic":
+				svr, err = quic.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
 			default:
 				svr, err = tcppool.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
 			}
@@ -111,6 +114,8 @@ func cmdClient() *cli.Command {
 				cli = tcpsendfile.NewClient(c.String("addr"), threads)
 			case "perf":
 				cli = perf.NewClient(c.String("addr"), threads)
+			case "quic":
+				cli = quic.NewClient(c.String("addr"), threads, c.Bool("compress"), c.Bool("crc"))
 			default:
 				cli = tcppool.NewClient(c.String("addr"), threads, c.Bool("compress"), c.Bool("crc"))
 			}
