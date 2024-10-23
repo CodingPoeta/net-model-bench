@@ -166,13 +166,35 @@ func (q *IOQueue) submitWorker() {
 
 	// no batch in this version
 	for req := range q.reqCH {
+		requests := make([]*request, 1)
 		if req == nil {
 			return
 		}
+		requests[0] = req
+		for {
+			shouldBreak := false
+			select {
+			case req = <-q.reqCH:
+				if req == nil {
+					return
+				}
+				requests = append(requests, req)
+				if len(requests) > 256 {
+					shouldBreak = true
+				}
+			default:
+				shouldBreak = true
+			}
+			if shouldBreak {
+				break
+			}
+		}
 		var bufs net.Buffers
 		hlen := 0
-		for _, s := range req.encodedHead {
-			hlen += len(s)
+		for _, req := range requests {
+			for _, s := range req.encodedHead {
+				hlen += len(s)
+			}
 		}
 		batch := &batchHdrDesc{
 			Version:    1,
@@ -180,16 +202,18 @@ func (q *IOQueue) submitWorker() {
 			HeadLength: uint32(hlen),
 			ChkSum:     0,
 		}
+		q.nextCookie += 1
 		q.mu.Lock()
 		q.inflightBatches[batch.Cookie] = &inflightBatchEntry{
-			reqs: []*request{req},
-			left: 1,
+			reqs: requests,
+			left: len(requests),
 		}
 		q.mu.Unlock()
 
-		q.nextCookie += 1
 		bufs = append(bufs, batch.Encode())
-		bufs = append(bufs, req.encodedHead...)
+		for _, req := range requests {
+			bufs = append(bufs, req.encodedHead...)
+		}
 		for len(bufs) > 0 {
 			_, err := bufs.WriteTo(q.conn)
 			if err != nil {
@@ -197,11 +221,13 @@ func (q *IOQueue) submitWorker() {
 				panic(err)
 			}
 		}
-		if req.Body != nil {
-			_, err := io.Copy(q.conn, req.Body)
-			if err != nil {
-				// TODO: reconnect
-				panic(err)
+		for _, req := range requests {
+			if req.Body != nil {
+				_, err := io.Copy(q.conn, req.Body)
+				if err != nil {
+					// TODO: reconnect
+					panic(err)
+				}
 			}
 		}
 	}

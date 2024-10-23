@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/codingpoeta/go-demo/common"
 	"github.com/codingpoeta/go-demo/utils"
@@ -103,6 +104,7 @@ func (q *IOQueueBackend) recvWorker() {
 				}
 				resp.ContentLen = uint32(len(buf))
 				resp.Body = bytes.NewBuffer(buf)
+				time.Sleep(time.Millisecond)
 				q.submit(&resp)
 			}(desc.Cookie, idx, req)
 		}
@@ -123,19 +125,47 @@ func (q *IOQueueBackend) submitWorker() {
 		if resp == nil {
 			return
 		}
+		resps := []*response{resp}
+
+		for {
+			shouldBreak := false
+			select {
+			case resp = <-q.respCH:
+				if resp == nil {
+					return
+				}
+				resps = append(resps, resp)
+				if len(resps) > 256 {
+					shouldBreak = true
+				}
+			default:
+				shouldBreak = true
+			}
+			if shouldBreak {
+				break
+			}
+		}
+		hLen := 0
+		for _, resp := range resps {
+			hLen += len(resp.encodedHead)
+		}
 		var bufs net.Buffers
 		batch := &batchHdrDesc{
 			Version:    1,
 			Cookie:     0, // TODO: resp should have a invalid cookie
-			HeadLength: uint32(len(resp.encodedHead)),
+			HeadLength: uint32(hLen),
 			ChkSum:     0,
 		}
 		bufs = append(bufs, batch.Encode())
-		bufs = append(bufs, resp.encodedHead)
+		for _, resp := range resps {
+			bufs = append(bufs, resp.encodedHead)
+		}
 		writeBody := true
-		if buf, ok := resp.Body.(*bytes.Buffer); resp.Body != nil && ok {
-			bufs = append(bufs, buf.Bytes())
-			writeBody = false
+		for _, resp := range resps {
+			if buf, ok := resp.Body.(*bytes.Buffer); resp.Body != nil && ok {
+				bufs = append(bufs, buf.Bytes())
+				writeBody = false
+			}
 		}
 
 		for len(bufs) > 0 {
@@ -145,11 +175,15 @@ func (q *IOQueueBackend) submitWorker() {
 				panic(err)
 			}
 		}
-		if writeBody && resp.Body != nil {
-			_, err := io.Copy(q.conn, resp.Body)
-			if err != nil {
-				// TODO: reconnect
-				panic(err)
+		if writeBody {
+			for _, resp := range resps {
+				if resp.Body != nil {
+					_, err := io.Copy(q.conn, resp.Body)
+					if err != nil {
+						// TODO: reconnect
+						panic(err)
+					}
+				}
 			}
 		}
 	}
