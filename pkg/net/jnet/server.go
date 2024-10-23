@@ -103,7 +103,9 @@ func (q *IOQueueBackend) recvWorker() {
 				}
 				resp.ContentLen = uint32(len(buf))
 				resp.Body = bytes.NewBuffer(buf)
-				q.submit(&resp)
+				//q.submit(&resp)
+				resp.encodedHead = resp.Encode()
+				q.sendResponses([]*response{&resp})
 			}(desc.Cookie, idx, req)
 		}
 	}
@@ -143,44 +145,48 @@ func (q *IOQueueBackend) submitWorker() {
 				break
 			}
 		}
-		hLen := 0
-		for _, resp := range resps {
-			hLen += len(resp.encodedHead)
-		}
-		var bufs net.Buffers
-		batch := &batchHdrDesc{
-			Version:    1,
-			Cookie:     0, // TODO: resp should have a invalid cookie
-			HeadLength: uint32(hLen),
-			ChkSum:     0,
-		}
-		bufs = append(bufs, batch.Encode())
-		for _, resp := range resps {
-			bufs = append(bufs, resp.encodedHead)
-		}
-		writeBody := true
-		for _, resp := range resps {
-			if buf, ok := resp.Body.(*bytes.Buffer); resp.Body != nil && ok {
-				bufs = append(bufs, buf.Bytes())
-				writeBody = false
-			}
-		}
+		q.sendResponses(resps)
+	}
+}
 
-		for len(bufs) > 0 {
-			_, err := bufs.WriteTo(q.conn)
-			if err != nil {
-				// TODO: reconnect
-				panic(err)
-			}
+func (q *IOQueueBackend) sendResponses(resps []*response) {
+	hLen := 0
+	for _, resp := range resps {
+		hLen += len(resp.encodedHead)
+	}
+	var bufs net.Buffers
+	batch := &batchHdrDesc{
+		Version:    1,
+		Cookie:     0, // TODO: resp should have a invalid cookie
+		HeadLength: uint32(hLen),
+		ChkSum:     0,
+	}
+	bufs = append(bufs, batch.Encode())
+	for _, resp := range resps {
+		bufs = append(bufs, resp.encodedHead)
+	}
+	writeBody := true
+	for _, resp := range resps {
+		if buf, ok := resp.Body.(*bytes.Buffer); resp.Body != nil && ok {
+			bufs = append(bufs, buf.Bytes())
+			writeBody = false
 		}
-		if writeBody {
-			for _, resp := range resps {
-				if resp.Body != nil {
-					_, err := io.Copy(q.conn, resp.Body)
-					if err != nil {
-						// TODO: reconnect
-						panic(err)
-					}
+	}
+
+	for len(bufs) > 0 {
+		_, err := bufs.WriteTo(q.conn)
+		if err != nil {
+			// TODO: reconnect
+			panic(err)
+		}
+	}
+	if writeBody {
+		for _, resp := range resps {
+			if resp.Body != nil {
+				_, err := io.Copy(q.conn, resp.Body)
+				if err != nil {
+					// TODO: reconnect
+					panic(err)
 				}
 			}
 		}
