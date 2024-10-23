@@ -96,6 +96,7 @@ type response struct {
 	ContentLen uint32
 	Buf        [64]byte
 	Body       io.Reader
+	bdBuf      *common.BodyBuffer
 
 	encodedHead []byte
 }
@@ -238,6 +239,14 @@ func (q *IOQueue) submitWorker() {
 	}
 }
 
+var bodyBufPool = &sync.Pool{
+	New: func() any {
+		return &common.BodyBuffer{
+			Buf: make([]byte, 4096*1024),
+		}
+	},
+}
+
 func (q *IOQueue) recvWorker() {
 	fmt.Println("recv worker started")
 	defer fmt.Println("recv worker closed")
@@ -261,6 +270,7 @@ func (q *IOQueue) recvWorker() {
 		if err != nil {
 			panic(err)
 		}
+		//fmt.Printf("desc %#v\n", desc)
 		left := desc.HeadLength
 		idx := 0
 		bodyLen := 0
@@ -276,18 +286,37 @@ func (q *IOQueue) recvWorker() {
 			resps = append(resps, resp)
 		}
 
-		bodyBuf := make([]byte, bodyLen)
-		_, err = io.ReadFull(q.conn, bodyBuf)
-		if err != nil {
-			// TODO:
-			panic(err)
+		left = uint32(bodyLen)
+		var bodyBufs []*common.BodyBuffer
+		for left > 0 {
+			bodyBuf := bodyBufPool.Get().(*common.BodyBuffer)
+			bodyBuf.Release = func() {
+				bodyBufPool.Put(bodyBuf)
+			}
+			fetchLen := min(left, 1024*4096)
+			_, err = io.ReadFull(q.conn, bodyBuf.Buf[:fetchLen])
+			if err != nil {
+				panic(err)
+			}
+			bodyBufs = append(bodyBufs, bodyBuf)
+			left -= fetchLen
 		}
-
 		off := 0
+		bodyIdx := 0
 		for _, resp := range resps {
 			if resp.ContentLen > 0 {
-				resp.Body = bytes.NewBuffer(bodyBuf[off : off+int(resp.ContentLen)])
-				off = off + int(resp.ContentLen)
+				if off+int(resp.ContentLen) <= 1024*4096 {
+					resp.Body = bytes.NewBuffer(bodyBufs[bodyIdx].Buf[off : off+int(resp.ContentLen)])
+					resp.bdBuf = bodyBufs[bodyIdx]
+					resp.bdBuf.Inc()
+					off = off + int(resp.ContentLen)
+				} else {
+					buf := make([]byte, resp.ContentLen)
+					n := copy(buf, bodyBufs[bodyIdx].Buf[off:])
+					bodyIdx += 1
+					copy(buf[n:], bodyBufs[bodyIdx].Buf[:int(resp.ContentLen)-n])
+					off = int(resp.ContentLen) - n
+				}
 			}
 			q.mu.RLock()
 			ents, ok := q.inflightBatches[resp.BatchId]
@@ -306,7 +335,6 @@ func (q *IOQueue) recvWorker() {
 			}
 			req.resp = resp
 			close(req.wait)
-
 		}
 	}
 }
@@ -359,5 +387,6 @@ func (c *Client) Get(req_ common.Request) (*common.Response, error) {
 	return &common.Response{
 		Body: body,
 		Size: uint32(len(body)),
+		BB:   resp.bdBuf,
 	}, err
 }

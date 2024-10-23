@@ -138,6 +138,9 @@ func cmdClient() *cli.Command {
 						cnt.Add(1)
 						sz.Add(uint64(len(res.Body)))
 						lat.Add(uint64(time.Since(since)))
+						if res.BB != nil {
+							res.BB.Dec()
+						}
 					}
 				}()
 			}
