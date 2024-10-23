@@ -49,6 +49,9 @@ type request struct {
 	wait       chan struct{}
 
 	encodedHead net.Buffers
+	batchId     uint64
+	idx         uint32
+	backend     *IOQueueBackend
 }
 
 func (r *request) Encode() net.Buffers {
@@ -157,7 +160,9 @@ func (q *IOQueue) submit(req *request) *response {
 	req.encodedHead = req.Encode()
 	q.reqCH <- req
 	<-req.wait
-	return req.resp
+	resp := req.resp
+	reqPool.Put(req)
+	return resp
 }
 
 func (q *IOQueue) submitWorker() {
@@ -260,7 +265,7 @@ func (q *IOQueue) recvWorker() {
 		idx := 0
 		bodyLen := 0
 		for left > 0 {
-			var resp response
+			resp := respPool.Get().(*response)
 			n, err := resp.Decode(respHeaderBuffer[idx:])
 			if err != nil {
 				panic(err)
@@ -268,7 +273,7 @@ func (q *IOQueue) recvWorker() {
 			left -= uint32(n)
 			idx += n
 			bodyLen += int(resp.ContentLen)
-			resps = append(resps, &resp)
+			resps = append(resps, resp)
 		}
 
 		bodyBuf := make([]byte, bodyLen)
@@ -349,6 +354,7 @@ func (c *Client) Get(req_ common.Request) (*common.Response, error) {
 	}
 	buf := resp.Body.(*bytes.Buffer)
 	body := buf.Bytes()
+	respPool.Put(resp)
 
 	return &common.Response{
 		Body: body,

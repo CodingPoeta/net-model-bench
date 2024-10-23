@@ -26,6 +26,8 @@ type IOQueueBackend struct {
 	respCH  chan *response
 }
 
+var workPool = NewWorkerPool()
+
 func NewIOQueueBackend(dataGen common.DataGen, c net.Conn) *IOQueueBackend {
 	q := &IOQueueBackend{
 		conn:    c,
@@ -63,7 +65,7 @@ func (q *IOQueueBackend) recvWorker() {
 		left := desc.HeadLength
 		idx := 0
 		for left > 0 {
-			var req request
+			req := reqPool.Get().(*request)
 			n, err := req.Decode(reqHeaderBuffer[idx:])
 			if err != nil {
 				panic(err)
@@ -78,35 +80,47 @@ func (q *IOQueueBackend) recvWorker() {
 				}
 				req.Body = buf
 			}
-			reqs = append(reqs, &req)
+			reqs = append(reqs, req)
 		}
 		for idx, req := range reqs {
-			go func(batchId uint64, idx int, req *request) {
-				var resp response
-				resp.Idx = uint32(idx)
-				resp.BatchId = batchId
-				var buf []byte
-				switch req.CMD {
-				case 0:
-					buf = q.dataGen.Get("key0")
-				case 1:
-					buf = q.dataGen.Get("key1")
-				case 2:
-					buf = q.dataGen.Get("key2")
-				case 3:
-					buf = q.dataGen.Get("key3")
-				case 4:
-					buf = q.dataGen.Get("key4")
-				default:
-					resp.ErrorCode = 1
-					resp.ErrorMsg = "invalid command"
-				}
-				resp.ContentLen = uint32(len(buf))
-				resp.Body = bytes.NewBuffer(buf)
-				q.submit(&resp)
-			}(desc.Cookie, idx, req)
+			req.batchId = desc.Cookie
+			req.idx = uint32(idx)
+			req.backend = q
+			workPool.Submit(req)
 		}
 	}
+}
+
+var respPool *sync.Pool = &sync.Pool{
+	New: func() any {
+		return &response{}
+	},
+}
+
+func (q *IOQueueBackend) processRequest(req *request) {
+	resp := respPool.Get().(*response)
+	resp.Idx = req.idx
+	resp.BatchId = req.batchId
+	var buf []byte
+	switch req.CMD {
+	case 0:
+		buf = q.dataGen.Get("key0")
+	case 1:
+		buf = q.dataGen.Get("key1")
+	case 2:
+		buf = q.dataGen.Get("key2")
+	case 3:
+		buf = q.dataGen.Get("key3")
+	case 4:
+		buf = q.dataGen.Get("key4")
+	default:
+		resp.ErrorCode = 1
+		resp.ErrorMsg = "invalid command"
+	}
+	reqPool.Put(req)
+	resp.ContentLen = uint32(len(buf))
+	resp.Body = bytes.NewBuffer(buf)
+	q.submit(resp)
 }
 
 func (q *IOQueueBackend) submit(resp *response) {
@@ -183,6 +197,9 @@ func (q *IOQueueBackend) submitWorker() {
 					}
 				}
 			}
+		}
+		for _, resp := range resps {
+			respPool.Put(resp)
 		}
 	}
 }
