@@ -258,6 +258,7 @@ func (q *IOQueue) recvWorker() {
 		}
 		left := desc.HeadLength
 		idx := 0
+		bodyLen := 0
 		for left > 0 {
 			var resp response
 			n, err := resp.Decode(respHeaderBuffer[idx:])
@@ -266,16 +267,23 @@ func (q *IOQueue) recvWorker() {
 			}
 			left -= uint32(n)
 			idx += n
-			buf := bytes.NewBuffer(nil)
-			_, err = io.CopyN(buf, q.conn, int64(resp.ContentLen))
-			if err != nil {
-				panic(err)
-			}
-			resp.Body = buf
+			bodyLen += int(resp.ContentLen)
 			resps = append(resps, &resp)
 		}
 
+		bodyBuf := make([]byte, bodyLen)
+		_, err = io.ReadFull(q.conn, bodyBuf)
+		if err != nil {
+			// TODO:
+			panic(err)
+		}
+
+		off := 0
 		for _, resp := range resps {
+			if resp.ContentLen > 0 {
+				resp.Body = bytes.NewBuffer(bodyBuf[off : off+int(resp.ContentLen)])
+				off = off + int(resp.ContentLen)
+			}
 			q.mu.RLock()
 			ents, ok := q.inflightBatches[resp.BatchId]
 			if !ok {
@@ -293,6 +301,7 @@ func (q *IOQueue) recvWorker() {
 			}
 			req.resp = resp
 			close(req.wait)
+
 		}
 	}
 }

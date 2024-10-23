@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/codingpoeta/go-demo/common"
 	"github.com/codingpoeta/go-demo/utils"
@@ -203,7 +202,6 @@ func (s *Server) handle(conn net.Conn) {
 		default:
 			res.Err = errors.New("invalid command")
 		}
-		time.Sleep(time.Millisecond)
 		err := res.Write(conn, req.compressOn, req.crcOn)
 		if err != nil {
 			fmt.Println(err)

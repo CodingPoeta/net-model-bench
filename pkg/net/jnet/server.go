@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/codingpoeta/go-demo/common"
 	"github.com/codingpoeta/go-demo/utils"
@@ -104,7 +103,6 @@ func (q *IOQueueBackend) recvWorker() {
 				}
 				resp.ContentLen = uint32(len(buf))
 				resp.Body = bytes.NewBuffer(buf)
-				time.Sleep(time.Millisecond)
 				q.submit(&resp)
 			}(desc.Cookie, idx, req)
 		}
