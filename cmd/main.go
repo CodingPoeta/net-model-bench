@@ -80,26 +80,39 @@ func cmdClient() *cli.Command {
 		Usage:    "client",
 		Category: "category2",
 		Action: func(c *cli.Context) error {
+			tps := c.Int("threads-per-con")
+			if tps == 0 {
+				tps = 1
+			}
+			batch := c.Int("batch")
+			if batch == 0 {
+				batch = 1
+			}
+			threads := c.Int("threads")
+			if threads == 0 {
+				threads = 1
+			}
+
 			fmt.Println("client")
 			var cli common.BlockClient
 			var err error
 			switch c.String("mode") {
 			case "grpc":
-				cli = grpc.NewClient(c.String("addr"), c.Int("threads-per-con"), int(c.Int("threads")/c.Int("threads-per-con")))
+				cli = grpc.NewClient(c.String("addr"), tps, int(threads/tps))
 			case "gorpc":
-				cli = gorpc.NewClient(c.String("addr"), c.Int("threads"))
+				cli = gorpc.NewClient(c.String("addr"), threads)
 			case "jnet":
-				cli, err = jnet.NewClient(c.String("addr"), c.Int("threads"), c.Bool("compress"), c.Bool("crc"))
+				cli, err = jnet.NewClient(c.String("addr"), threads, c.Bool("compress"), c.Bool("crc"))
 				if err != nil {
 					panic(err)
 				}
 			case "iorpc": // TODO
 			case "tcpsendfile":
-				cli = tcpsendfile.NewClient(c.String("addr"), c.Int("threads"))
+				cli = tcpsendfile.NewClient(c.String("addr"), threads)
 			case "perf":
-				cli = perf.NewClient(c.String("addr"), c.Int("threads"))
+				cli = perf.NewClient(c.String("addr"), threads)
 			default:
-				cli = tcppool.NewClient(c.String("addr"), c.Int("threads"), c.Bool("compress"), c.Bool("crc"))
+				cli = tcppool.NewClient(c.String("addr"), threads, c.Bool("compress"), c.Bool("crc"))
 			}
 			cmd := uint8(c.Int("cmd"))
 			defer cli.Close()
@@ -108,13 +121,13 @@ func cmdClient() *cli.Command {
 			var sz atomic.Uint64
 			var lat atomic.Uint64
 
-			for i := 0; i < c.Int("threads"); i++ {
+			for i := 0; i < threads; i++ {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
 					for {
 						since := time.Now()
-						res, err := cli.Get(common.Request{CMD: cmd, Key: fmt.Sprint("testkey"), Batch: c.Int("batch")})
+						res, err := cli.Get(common.Request{CMD: cmd, Key: fmt.Sprint("testkey"), Batch: batch})
 						if err != nil {
 							fmt.Println(err)
 							break

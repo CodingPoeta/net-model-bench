@@ -63,9 +63,13 @@ func (r *response) Write(w io.Writer, comp, crc bool) error {
 		} else {
 			binary.BigEndian.PutUint32(header[8:12], 0)
 		}
-		_, _ = buf.Write(header[:])
-		_, _ = buf.Write(r.Body)
-		_, err := w.Write(buf.Bytes())
+		//_, _ = buf.Write(header[:])
+		//_, _ = buf.Write(r.Body)
+		//_, err := w.Write(buf.Bytes())
+		var bufs net.Buffers
+		bufs = append(bufs, header[:])
+		bufs = append(bufs, r.Body)
+		_, err := bufs.WriteTo(w)
 		return err
 	}
 }
