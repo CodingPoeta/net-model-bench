@@ -19,11 +19,11 @@ func NewMemData() DataGen {
 
 	res := &MemData{
 		data: map[string][]byte{
-			"key0": buf[:1<<10],
-			"key1": buf[1<<20 : 2<<20],
-			"key2": buf[2<<20 : 4<<20],
-			"key3": buf[4<<20 : 7<<20],
-			"key4": buf[7<<20 : 11<<20],
+			"key0": buf[:4<<10],
+			"key1": buf[4<<10 : 68<<10],
+			"key2": buf[100<<10 : 228<<10],
+			"key3": buf[11<<20 : 12<<20],
+			"key4": buf[12<<20 : 16<<20],
 		},
 	}
 	return res
