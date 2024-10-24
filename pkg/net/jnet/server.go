@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/codingpoeta/go-demo/common"
 	"github.com/codingpoeta/go-demo/utils"
@@ -46,6 +47,11 @@ func (q *IOQueueBackend) recvWorker() {
 	var desc batchHdrDesc
 	var reqHeaderBuffer [1024 * 1024]byte
 	reqs := make([]*request, 0)
+	totalMergeCount := 0
+	totalCallCount := 0
+	lastPrintTime := time.Now()
+	lastPrintMergeCount := 0
+	lastPrintCallCount := 0
 	for {
 		reqs = reqs[:0]
 		_, err := io.ReadFull(q.conn, desc.Buf[:])
@@ -81,6 +87,16 @@ func (q *IOQueueBackend) recvWorker() {
 				req.Body = buf
 			}
 			reqs = append(reqs, req)
+		}
+		totalMergeCount += len(reqs)
+		totalCallCount += 1
+		if time.Now().After(lastPrintTime.Add(time.Second * 10)) {
+			callCount := totalCallCount - lastPrintCallCount
+			mergeCount := totalMergeCount - lastPrintMergeCount
+			fmt.Printf("server recv: avg batch count %d\n", mergeCount/callCount)
+			lastPrintMergeCount = totalMergeCount
+			lastPrintCallCount = totalCallCount
+			lastPrintTime = time.Now()
 		}
 		for idx, req := range reqs {
 			req.batchId = desc.Cookie
@@ -120,6 +136,7 @@ func (q *IOQueueBackend) processRequest(req *request) {
 	reqPool.Put(req)
 	resp.ContentLen = uint32(len(buf))
 	resp.Body = bytes.NewBuffer(buf)
+	//time.Sleep(2 * time.Millisecond)
 	q.submit(resp)
 }
 
@@ -132,6 +149,11 @@ func (q *IOQueueBackend) submitWorker() {
 	// no batch in this version
 	fmt.Println("server submit worker started")
 	defer fmt.Println("server submit worker closed")
+	totalMergeCount := 0
+	totalCallCount := 0
+	lastPrintTime := time.Now()
+	lastPrintMergeCount := 0
+	lastPrintCallCount := 0
 
 	for resp := range q.respCH {
 		if resp == nil {
@@ -150,12 +172,22 @@ func (q *IOQueueBackend) submitWorker() {
 				if len(resps) > 256 {
 					shouldBreak = true
 				}
-			default:
+			case <-shouldSubmit:
 				shouldBreak = true
 			}
 			if shouldBreak {
 				break
 			}
+		}
+		totalMergeCount += len(resps)
+		totalCallCount += 1
+		if time.Now().After(lastPrintTime.Add(time.Second * 10)) {
+			callCount := totalCallCount - lastPrintCallCount
+			mergeCount := totalMergeCount - lastPrintMergeCount
+			fmt.Printf("server submit: avg merge count %d\n", mergeCount/callCount)
+			lastPrintMergeCount = totalMergeCount
+			lastPrintCallCount = totalCallCount
+			lastPrintTime = time.Now()
 		}
 		hLen := 0
 		for _, resp := range resps {
@@ -229,6 +261,15 @@ func NewServer(ip, iname string, dg common.DataGen) (common.BlockServer, error) 
 		dataGen:  dg,
 		backends: make([]*IOQueueBackend, 0),
 	}
+	go func() {
+		for {
+			time.Sleep(heartBeatInterval * time.Microsecond)
+			select {
+			case shouldSubmit <- struct{}{}:
+			default:
+			}
+		}
+	}()
 
 	return svr, nil
 }

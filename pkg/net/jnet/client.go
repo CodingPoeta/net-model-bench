@@ -12,6 +12,10 @@ import (
 	"github.com/codingpoeta/go-demo/common"
 )
 
+const heartBeatInterval = 10
+
+var shouldSubmit = make(chan struct{})
+
 type batchHdrDesc struct {
 	Version    uint32
 	Cookie     uint64
@@ -159,7 +163,14 @@ func NewIOQueue(addr string) (*IOQueue, error) {
 
 func (q *IOQueue) submit(req *request) *response {
 	req.encodedHead = req.Encode()
-	q.reqCH <- req
+again:
+	select {
+	case q.reqCH <- req:
+		//fmt.Println("submit request")
+	default:
+		fmt.Println("submit request failed, channel full, start another worker")
+		goto again
+	}
 	<-req.wait
 	resp := req.resp
 	reqPool.Put(req)
@@ -188,7 +199,7 @@ func (q *IOQueue) submitWorker() {
 				if len(requests) > 256 {
 					shouldBreak = true
 				}
-			default:
+			case <-shouldSubmit:
 				shouldBreak = true
 			}
 			if shouldBreak {
@@ -362,6 +373,15 @@ func NewClient(addr string, cons int, compressOn, crcOn bool) (common.BlockClien
 		crcOn:      crcOn,
 		q:          q,
 	}
+	go func() {
+		for {
+			time.Sleep(heartBeatInterval * time.Microsecond)
+			select {
+			case shouldSubmit <- struct{}{}:
+			default:
+			}
+		}
+	}()
 	return cli, nil
 }
 
