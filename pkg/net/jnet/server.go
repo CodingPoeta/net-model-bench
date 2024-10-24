@@ -63,6 +63,7 @@ func (q *IOQueueBackend) recvWorker() {
 		if err != nil {
 			panic(err)
 		}
+
 		// read headers
 		_, err = io.ReadFull(q.conn, reqHeaderBuffer[:desc.HeadLength])
 		if err != nil {
@@ -136,13 +137,60 @@ func (q *IOQueueBackend) processRequest(req *request) {
 	reqPool.Put(req)
 	resp.ContentLen = uint32(len(buf))
 	resp.Body = bytes.NewBuffer(buf)
-	//time.Sleep(2 * time.Millisecond)
 	q.submit(resp)
 }
 
 func (q *IOQueueBackend) submit(resp *response) {
 	resp.encodedHead = resp.Encode()
 	q.respCH <- resp
+}
+
+func (q *IOQueueBackend) flush(resps []*response) {
+	hLen := 0
+	for _, resp := range resps {
+		hLen += len(resp.encodedHead)
+	}
+	var bufs net.Buffers
+	batch := &batchHdrDesc{
+		Version:    1,
+		Cookie:     0, // TODO: resp should have a invalid cookie
+		HeadLength: uint32(hLen),
+		ChkSum:     0,
+	}
+	bufs = append(bufs, batch.Encode())
+	for _, resp := range resps {
+		bufs = append(bufs, resp.encodedHead)
+	}
+	writeBody := true
+	for _, resp := range resps {
+		if buf, ok := resp.Body.(*bytes.Buffer); resp.Body != nil && ok {
+			bufs = append(bufs, buf.Bytes())
+			writeBody = false
+		}
+	}
+
+	for len(bufs) > 0 {
+		_, err := bufs.WriteTo(q.conn)
+		if err != nil {
+			// TODO: reconnect
+			panic(err)
+		}
+	}
+	if writeBody {
+		for _, resp := range resps {
+			if resp.Body != nil {
+				_, err := io.Copy(q.conn, resp.Body)
+				if err != nil {
+					// TODO: reconnect
+					panic(err)
+				}
+			}
+		}
+	}
+	for _, resp := range resps {
+		respPool.Put(resp)
+	}
+
 }
 
 func (q *IOQueueBackend) submitWorker() {
@@ -154,13 +202,13 @@ func (q *IOQueueBackend) submitWorker() {
 	lastPrintTime := time.Now()
 	lastPrintMergeCount := 0
 	lastPrintCallCount := 0
-
+	resps := make([]*response, 0)
+	totalPayloadSize := 0
 	for resp := range q.respCH {
 		if resp == nil {
 			return
 		}
-		resps := []*response{resp}
-
+		resps = append(resps, resp)
 		for {
 			shouldBreak := false
 			select {
@@ -169,7 +217,11 @@ func (q *IOQueueBackend) submitWorker() {
 					return
 				}
 				resps = append(resps, resp)
-				if len(resps) > 256 {
+				totalPayloadSize += int(resp.ContentLen)
+				if len(resps) > MaxBatchCount {
+					shouldBreak = true
+				}
+				if totalPayloadSize > MaxBatchSize {
 					shouldBreak = true
 				}
 			case <-shouldSubmit:
@@ -189,50 +241,9 @@ func (q *IOQueueBackend) submitWorker() {
 			lastPrintCallCount = totalCallCount
 			lastPrintTime = time.Now()
 		}
-		hLen := 0
-		for _, resp := range resps {
-			hLen += len(resp.encodedHead)
-		}
-		var bufs net.Buffers
-		batch := &batchHdrDesc{
-			Version:    1,
-			Cookie:     0, // TODO: resp should have a invalid cookie
-			HeadLength: uint32(hLen),
-			ChkSum:     0,
-		}
-		bufs = append(bufs, batch.Encode())
-		for _, resp := range resps {
-			bufs = append(bufs, resp.encodedHead)
-		}
-		writeBody := true
-		for _, resp := range resps {
-			if buf, ok := resp.Body.(*bytes.Buffer); resp.Body != nil && ok {
-				bufs = append(bufs, buf.Bytes())
-				writeBody = false
-			}
-		}
-
-		for len(bufs) > 0 {
-			_, err := bufs.WriteTo(q.conn)
-			if err != nil {
-				// TODO: reconnect
-				panic(err)
-			}
-		}
-		if writeBody {
-			for _, resp := range resps {
-				if resp.Body != nil {
-					_, err := io.Copy(q.conn, resp.Body)
-					if err != nil {
-						// TODO: reconnect
-						panic(err)
-					}
-				}
-			}
-		}
-		for _, resp := range resps {
-			respPool.Put(resp)
-		}
+		q.flush(resps)
+		resps = make([]*response, 0)
+		totalPayloadSize = 0
 	}
 }
 
@@ -264,10 +275,7 @@ func NewServer(ip, iname string, dg common.DataGen) (common.BlockServer, error) 
 	go func() {
 		for {
 			time.Sleep(heartBeatInterval * time.Microsecond)
-			select {
-			case shouldSubmit <- struct{}{}:
-			default:
-			}
+			shouldSubmit <- struct{}{}
 		}
 	}()
 

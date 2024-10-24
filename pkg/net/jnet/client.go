@@ -177,75 +177,94 @@ again:
 	return resp
 }
 
+const MaxBatchCount = 64
+const MaxBatchSize = 1024 * 1024
+
+func (q *IOQueue) flush(requests []*request) error {
+	hlen := 0
+	var bufs net.Buffers
+	for _, req := range requests {
+		for _, s := range req.encodedHead {
+			hlen += len(s)
+		}
+	}
+	batch := &batchHdrDesc{
+		Version:    1,
+		Cookie:     q.nextCookie,
+		HeadLength: uint32(hlen),
+		ChkSum:     0,
+	}
+	q.nextCookie += 1
+	q.mu.Lock()
+	q.inflightBatches[batch.Cookie] = &inflightBatchEntry{
+		reqs: requests,
+		left: len(requests),
+	}
+	q.mu.Unlock()
+
+	bufs = append(bufs, batch.Encode())
+	for _, req := range requests {
+		bufs = append(bufs, req.encodedHead...)
+	}
+	for len(bufs) > 0 {
+		_, err := bufs.WriteTo(q.conn)
+		if err != nil {
+			return err
+		}
+	}
+	for _, req := range requests {
+		if req.Body != nil {
+			_, err := io.Copy(q.conn, req.Body)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (q *IOQueue) submitWorker() {
 	fmt.Println("submit worker started")
 	defer fmt.Println("submit worker closed")
 
 	// no batch in this version
-	for req := range q.reqCH {
-		requests := make([]*request, 1)
-		if req == nil {
-			return
-		}
-		requests[0] = req
-		for {
-			shouldBreak := false
-			select {
-			case req = <-q.reqCH:
-				if req == nil {
-					return
-				}
-				requests = append(requests, req)
-				if len(requests) > 256 {
+	requests := make([]*request, 0)
+	totalPayloadSize := 0
+	for {
+		select {
+		case req := <-q.reqCH:
+			if req == nil {
+				return
+			}
+			requests = append(requests, req)
+			for {
+				shouldBreak := false
+				select {
+				case req = <-q.reqCH:
+					if req == nil {
+						return
+					}
+					requests = append(requests, req)
+					totalPayloadSize += int(req.ContentLen)
+					if len(requests) >= MaxBatchCount {
+						shouldBreak = true
+					}
+
+					if totalPayloadSize >= MaxBatchSize {
+						shouldBreak = true
+					}
+				case <-shouldSubmit:
 					shouldBreak = true
 				}
-			case <-shouldSubmit:
-				shouldBreak = true
-			}
-			if shouldBreak {
-				break
-			}
-		}
-		var bufs net.Buffers
-		hlen := 0
-		for _, req := range requests {
-			for _, s := range req.encodedHead {
-				hlen += len(s)
-			}
-		}
-		batch := &batchHdrDesc{
-			Version:    1,
-			Cookie:     q.nextCookie,
-			HeadLength: uint32(hlen),
-			ChkSum:     0,
-		}
-		q.nextCookie += 1
-		q.mu.Lock()
-		q.inflightBatches[batch.Cookie] = &inflightBatchEntry{
-			reqs: requests,
-			left: len(requests),
-		}
-		q.mu.Unlock()
-
-		bufs = append(bufs, batch.Encode())
-		for _, req := range requests {
-			bufs = append(bufs, req.encodedHead...)
-		}
-		for len(bufs) > 0 {
-			_, err := bufs.WriteTo(q.conn)
-			if err != nil {
-				// TODO: reconnect
-				panic(err)
-			}
-		}
-		for _, req := range requests {
-			if req.Body != nil {
-				_, err := io.Copy(q.conn, req.Body)
-				if err != nil {
-					// TODO: reconnect
-					panic(err)
+				if shouldBreak {
+					break
 				}
 			}
+			if err := q.flush(requests); err != nil {
+				panic(err)
+			}
+			requests = make([]*request, 0)
+			totalPayloadSize = 0
 		}
 	}
 }
@@ -281,7 +300,6 @@ func (q *IOQueue) recvWorker() {
 		if err != nil {
 			panic(err)
 		}
-		//fmt.Printf("desc %#v\n", desc)
 		left := desc.HeadLength
 		idx := 0
 		bodyLen := 0
@@ -333,6 +351,9 @@ func (q *IOQueue) recvWorker() {
 					off = int(resp.ContentLen) - n
 				}
 			}
+			if resp.ContentLen == 0 {
+				panic("")
+			}
 			q.mu.RLock()
 			ents, ok := q.inflightBatches[resp.BatchId]
 			if !ok {
@@ -380,10 +401,7 @@ func NewClient(addr string, cons int, compressOn, crcOn bool) (common.BlockClien
 	go func() {
 		for {
 			time.Sleep(heartBeatInterval * time.Microsecond)
-			select {
-			case shouldSubmit <- struct{}{}:
-			default:
-			}
+			shouldSubmit <- struct{}{}
 		}
 	}()
 	return cli, nil
