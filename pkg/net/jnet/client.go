@@ -321,6 +321,10 @@ func (q *IOQueue) recvWorker() {
 					resp.bdBuf = bodyBufs[bodyIdx]
 					resp.bdBuf.Inc()
 					off = off + int(resp.ContentLen)
+					if off == 1024*4096 {
+						off = 0
+						bodyIdx += 1
+					}
 				} else {
 					buf := make([]byte, resp.ContentLen)
 					n := copy(buf, bodyBufs[bodyIdx].Buf[off:])
