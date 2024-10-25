@@ -128,11 +128,11 @@ func cmdClient() *cli.Command {
 
 			for i := 0; i < threads; i++ {
 				wg.Add(1)
-				go func() {
+				go func(id int) {
 					defer wg.Done()
 					for {
 						since := time.Now()
-						res, err := cli.Get(common.Request{CMD: cmd, Key: fmt.Sprint("testkey"), Batch: batch})
+						res, err := cli.Get(common.Request{CMD: cmd, Key: fmt.Sprintf("%d", id), Batch: batch})
 						if err != nil {
 							fmt.Println(err)
 							break
@@ -147,7 +147,7 @@ func cmdClient() *cli.Command {
 							res.BB.Dec()
 						}
 					}
-				}()
+				}(i)
 			}
 			go func() {
 				for {

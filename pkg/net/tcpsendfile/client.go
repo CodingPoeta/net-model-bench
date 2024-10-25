@@ -88,9 +88,23 @@ func (c *Client) Close() {
 	close(c.conns)
 }
 
+var payloadBufPool = &sync.Pool{
+	New: func() any {
+		return &common.BodyBuffer{
+			Buf: make([]byte, 5120*1024),
+		}
+	},
+}
+
 func (c *Client) Get(req_ common.Request) (*common.Response, error) {
 	var res common.Response
-	res.Body = make([]byte, 4<<20)
+	payloadBuf := payloadBufPool.Get().(*common.BodyBuffer)
+	payloadBuf.Release = func() {
+		payloadBufPool.Put(payloadBuf)
+	}
+	res.Body = payloadBuf.Buf
+	res.BB = payloadBuf
+	res.BB.Inc()
 
 	err := c.withConn(func(conn net.Conn) error {
 		req := request{Request: req_}
@@ -99,7 +113,7 @@ func (c *Client) Get(req_ common.Request) (*common.Response, error) {
 			fmt.Println("write error:", err)
 			return err
 		}
-		n, err := conn.Read(res.Body)
+		n, err := io.ReadFull(conn, res.Body[:4<<20])
 		if err != nil {
 			fmt.Println("read error:", err)
 			return err
@@ -108,7 +122,11 @@ func (c *Client) Get(req_ common.Request) (*common.Response, error) {
 		res.Body = res.Body[:n]
 		return nil
 	})
-	return &res, err
+	return &common.Response{
+		Body: res.Body,
+		Size: uint32(len(res.Body)),
+		BB:   res.BB,
+	}, err
 }
 
 func NewClient(addr string, cons int) common.BlockClient {

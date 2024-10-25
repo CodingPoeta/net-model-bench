@@ -32,3 +32,7 @@ func NewMemData() DataGen {
 func (m *MemData) Get(key string) []byte {
 	return m.data[key]
 }
+
+func (m *MemData) GetSize(key string) int {
+	return len(m.data[key])
+}

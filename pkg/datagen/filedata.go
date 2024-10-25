@@ -1,8 +1,9 @@
 package datagen
 
 import (
-	"github.com/valyala/bytebufferpool"
 	"os"
+
+	"github.com/valyala/bytebufferpool"
 )
 
 type FileData struct {
@@ -62,4 +63,20 @@ func (m *FileData) Get(key string) []byte {
 	}
 
 	return buf.Bytes()
+}
+
+func (m *FileData) GetSize(key string) int {
+	switch key {
+	case "key0":
+		return 1 << 10
+	case "key1":
+		return 1 << 20
+	case "key2":
+		return 2 << 20
+	case "key3":
+		return 3 << 20
+	case "key4":
+		return 4 << 20
+	}
+	return 0
 }
