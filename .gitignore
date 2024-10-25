@@ -3,3 +3,4 @@ bench
 .DS_Store
 .idea
 .vscode
+bin/

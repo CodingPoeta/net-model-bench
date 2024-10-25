@@ -17,6 +17,14 @@ import (
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
 
+var payloadBufPool = &sync.Pool{
+	New: func() any {
+		return &common.BodyBuffer{
+			Buf: make([]byte, 5120*1024),
+		}
+	},
+}
+
 type response struct {
 	common.Response
 	Header [13]byte
@@ -89,7 +97,11 @@ func (r *response) Read(conn net.Conn) error {
 		r.tsz = int(osize)
 	}
 	// fmt.Println("size:", size)
-	payload := make([]byte, r.tsz)
+	payloadBuf := payloadBufPool.Get().(*common.BodyBuffer)
+	payloadBuf.Release = func() {
+		payloadBufPool.Put(payloadBuf)
+	}
+	payload := payloadBuf.Buf[:r.tsz]
 	//deadline := time.Now().Add(1 * time.Second)
 	//_ = conn.SetReadDeadline(deadline)
 	var got, cnt int
@@ -99,7 +111,8 @@ func (r *response) Read(conn net.Conn) error {
 		//	deadline = time.Now().Add(1 * time.Second)
 		//	_ = conn.SetReadDeadline(deadline)
 		//}
-		if n, err := conn.Read(payload[got:]); err != nil {
+		if n, err := io.ReadFull(conn, payload[got:]); err != nil {
+			// if n, err := conn.Read(payload[got:]); err != nil {
 			return err
 		} else {
 			got += n
@@ -115,9 +128,15 @@ func (r *response) Read(conn net.Conn) error {
 	}
 	if compsize == 0 {
 		r.Body = payload
+		r.BB = payloadBuf
+		r.BB.Inc()
 	} else {
-		r.Body = make([]byte, osize)
+		tmp := payloadBufPool.Get().(*common.BodyBuffer)
+		tmp.Release = func() { payloadBufPool.Put(tmp) }
+		r.Body = tmp.Buf[:osize]
 		n, err := utils.LZ4_decompress_fast(payload, r.Body)
+		r.BB = tmp
+		r.BB.Inc()
 		if err != nil {
 			return err
 		}
@@ -183,6 +202,9 @@ func (s *Server) Serve() (err error) {
 }
 
 func (s *Server) handle(conn net.Conn) {
+	// bfsz := 10 << 20
+	// conn.(*net.TCPConn).SetWriteBuffer(bfsz)
+	// conn.(*net.TCPConn).SetReadBuffer(bfsz)
 	defer conn.Close()
 	for {
 		var req request

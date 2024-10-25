@@ -86,6 +86,9 @@ func (c *Client) getConn() (net.Conn, error) {
 		defer c.Unlock()
 		dialer := &net.Dialer{Timeout: time.Second + time.Millisecond*100, KeepAlive: time.Minute}
 		c, err := dialer.Dial("tcp", c.addr)
+		// bfsz := 10 << 20
+		// c.(*net.TCPConn).SetWriteBuffer(bfsz)
+		// c.(*net.TCPConn).SetReadBuffer(bfsz)
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +119,7 @@ func (c *Client) Close() {
 }
 
 func (c *Client) Get(req_ common.Request) (*common.Response, error) {
-	var res response
+	var res = &response{}
 
 	err := c.withConn(func(conn net.Conn) error {
 		req := request{Request: req_, compressOn: c.compressOn, crcOn: c.crcOn}
@@ -138,5 +141,9 @@ func (c *Client) Get(req_ common.Request) (*common.Response, error) {
 		}
 		return nil
 	})
-	return &(res.Response), err
+	return &common.Response{
+		Body: res.Body,
+		Size: uint32(len(res.Body)),
+		BB:   res.BB,
+	}, err
 }
