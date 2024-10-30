@@ -1,7 +1,7 @@
 package gorpc
 
 import (
-	"github.com/codingpoeta/go-demo/common"
+	"github.com/codingpoeta/net-model-bench/common"
 	"github.com/valyala/gorpc"
 	"sync"
 )

@@ -2,8 +2,8 @@ package gorpc
 
 import (
 	"fmt"
-	"github.com/codingpoeta/go-demo/common"
-	"github.com/codingpoeta/go-demo/utils"
+	"github.com/codingpoeta/net-model-bench/common"
+	"github.com/codingpoeta/net-model-bench/utils"
 	"github.com/valyala/gorpc"
 	"log"
 )

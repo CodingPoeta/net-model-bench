@@ -3,7 +3,7 @@ package datagen
 import (
 	"math/rand"
 
-	"github.com/codingpoeta/go-demo/utils"
+	"github.com/codingpoeta/net-model-bench/utils"
 )
 
 type MemData struct {

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/codingpoeta/go-demo/common"
-	pb "github.com/codingpoeta/go-demo/pkg/net/grpc/proto"
-	"github.com/codingpoeta/go-demo/utils"
+	"github.com/codingpoeta/net-model-bench/common"
+	pb "github.com/codingpoeta/net-model-bench/pkg/net/grpc/proto"
+	"github.com/codingpoeta/net-model-bench/utils"
 	"google.golang.org/grpc"
 )
 

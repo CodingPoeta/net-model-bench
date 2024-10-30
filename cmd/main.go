@@ -9,20 +9,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/codingpoeta/go-demo/pkg/net/gorpc"
-	"github.com/codingpoeta/go-demo/pkg/net/jnet"
-	"github.com/codingpoeta/go-demo/pkg/net/perf"
-	"github.com/codingpoeta/go-demo/pkg/net/quic"
-
-	"github.com/codingpoeta/go-demo/common"
-	"github.com/codingpoeta/go-demo/pkg/datagen"
-	"github.com/codingpoeta/go-demo/pkg/net/grpc"
-	"github.com/codingpoeta/go-demo/pkg/net/tcppool"
-	"github.com/codingpoeta/go-demo/pkg/net/tcpsendfile"
-
-	_ "net/http/pprof"
-
+	"github.com/codingpoeta/net-model-bench/common"
+	"github.com/codingpoeta/net-model-bench/pkg/datagen"
+	"github.com/codingpoeta/net-model-bench/pkg/net/gorpc"
+	"github.com/codingpoeta/net-model-bench/pkg/net/grpc"
+	"github.com/codingpoeta/net-model-bench/pkg/net/jnet"
+	"github.com/codingpoeta/net-model-bench/pkg/net/perf"
+	"github.com/codingpoeta/net-model-bench/pkg/net/quic"
+	"github.com/codingpoeta/net-model-bench/pkg/net/tcppool"
+	"github.com/codingpoeta/net-model-bench/pkg/net/tcpsendfile"
 	"github.com/urfave/cli/v2"
+	_ "net/http/pprof"
 )
 
 var debugPort = 6060

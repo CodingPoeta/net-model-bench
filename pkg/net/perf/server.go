@@ -2,16 +2,25 @@ package perf
 
 import (
 	"fmt"
-	"github.com/codingpoeta/go-demo/common"
-	"github.com/codingpoeta/go-demo/utils"
+	"github.com/codingpoeta/net-model-bench/common"
+	"github.com/codingpoeta/net-model-bench/utils"
 	"log"
 	"net"
 	"os"
 	"sync"
 )
 
+type servermode int
+
+const (
+	MODE_SENDBUF = iota
+	MODE_SENDFILE
+	MODE_SPLICE
+)
+
 type Server struct {
 	sync.Mutex
+	mode     servermode
 	listener net.Listener
 	ip       string
 	port     int
@@ -55,7 +64,15 @@ func (s *Server) handle(conn net.Conn) {
 			log.Println(err)
 			break
 		}
-		_, err = tcpConn.ReadFrom(file)
+		switch s.mode {
+		case MODE_SENDBUF:
+			buf := s.dataGen.Get("key4")
+			_, err = tcpConn.Write(buf)
+		case MODE_SENDFILE:
+			_, err = tcpConn.ReadFrom(file)
+		case MODE_SPLICE:
+			err = utils.SpliceSendFile(tcpConn, file)
+		}
 		file.Close()
 		if err != nil {
 			log.Println(err)
@@ -79,11 +96,20 @@ func NewServer(ip, iname string, dg common.DataGen) (common.BlockServer, error) 
 	if err != nil {
 		return nil, err
 	}
-
 	svr := &Server{
+		mode:    MODE_SENDFILE,
 		ip:      ip,
 		port:    8000,
 		dataGen: dg,
+	}
+	mode := os.Getenv("SERVER_MODE")
+	switch mode {
+	case "sendbuf":
+		svr.mode = MODE_SENDBUF
+	case "splice":
+		svr.mode = MODE_SPLICE
+	default:
+		svr.mode = MODE_SENDFILE
 	}
 
 	return svr, nil

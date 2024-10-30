@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/codingpoeta/go-demo/common"
+	"github.com/codingpoeta/net-model-bench/common"
 )
 
 type Client struct {

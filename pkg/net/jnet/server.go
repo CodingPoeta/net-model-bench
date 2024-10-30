@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/codingpoeta/go-demo/common"
-	"github.com/codingpoeta/go-demo/utils"
+	"github.com/codingpoeta/net-model-bench/common"
+	"github.com/codingpoeta/net-model-bench/utils"
 )
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)

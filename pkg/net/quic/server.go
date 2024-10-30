@@ -10,13 +10,13 @@ import (
 	"net"
 	"sync"
 
-	"github.com/codingpoeta/go-demo/common"
-	"github.com/codingpoeta/go-demo/utils"
+	"github.com/codingpoeta/net-model-bench/common"
+	"github.com/codingpoeta/net-model-bench/utils"
+
+	"github.com/quic-go/quic-go"
 	"github.com/valyala/bytebufferpool"
 
 	_ "net/http/pprof"
-
-	"github.com/quic-go/quic-go"
 )
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
