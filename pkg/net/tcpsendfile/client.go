@@ -45,6 +45,7 @@ func (r *request) Read(conn net.Conn) error {
 
 type Client struct {
 	sync.Mutex
+	dg    common.DataGen
 	addr  string
 	conns chan net.Conn
 }
@@ -113,7 +114,7 @@ func (c *Client) Get(req_ common.Request) (*common.Response, error) {
 			fmt.Println("write error:", err)
 			return err
 		}
-		n, err := io.ReadFull(conn, res.Body[:4<<20])
+		n, err := io.ReadFull(conn, res.Body[:c.dg.GetSize(fmt.Sprintf("%s%d", "key", req.CMD))])
 		if err != nil {
 			fmt.Println("read error:", err)
 			return err
@@ -129,8 +130,9 @@ func (c *Client) Get(req_ common.Request) (*common.Response, error) {
 	}, err
 }
 
-func NewClient(addr string, cons int) common.BlockClient {
+func NewClient(addr string, cons int, datagen common.DataGen) common.BlockClient {
 	return &Client{
+		dg:    datagen,
 		addr:  addr,
 		conns: make(chan net.Conn, cons),
 	}

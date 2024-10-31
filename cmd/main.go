@@ -108,7 +108,7 @@ func cmdClient() *cli.Command {
 				}
 			case "iorpc": // TODO
 			case "tcpsendfile":
-				cli = tcpsendfile.NewClient(c.String("addr"), threads)
+				cli = tcpsendfile.NewClient(c.String("addr"), threads, datagen.NewMemData())
 			case "perf":
 				cli = perf.NewClient(c.String("addr"), threads)
 			case "quic":

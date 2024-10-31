@@ -1,6 +1,9 @@
 package datagen
 
 import (
+	"bytes"
+	"github.com/codingpoeta/net-model-bench/common"
+	"io"
 	"math/rand"
 
 	"github.com/codingpoeta/net-model-bench/utils"
@@ -10,7 +13,7 @@ type MemData struct {
 	data map[string][]byte
 }
 
-func NewMemData() DataGen {
+func NewMemData() common.DataGen {
 	buf := make([]byte, 1<<24)
 
 	for i := 0; i < 1<<24; i++ {
@@ -31,6 +34,10 @@ func NewMemData() DataGen {
 
 func (m *MemData) Get(key string) []byte {
 	return m.data[key]
+}
+
+func (m *MemData) GetReader(key string) io.Reader {
+	return bytes.NewReader(m.Get(key))
 }
 
 func (m *MemData) GetSize(key string) int {

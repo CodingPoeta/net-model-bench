@@ -7,6 +7,7 @@ import (
 	"hash/crc32"
 	"io"
 	"net"
+	"os"
 	"sync"
 
 	"github.com/codingpoeta/net-model-bench/common"
@@ -156,6 +157,7 @@ func (r *response) Read(conn net.Conn) error {
 
 type Server struct {
 	sync.Mutex
+	mode     common.ServerMode
 	listener net.Listener
 	ip       string
 	port     int
@@ -169,9 +171,19 @@ func NewServer(ip, iname string, dg common.DataGen) (common.BlockServer, error) 
 	}
 
 	svr := &Server{
+		mode:    common.MODE_SENDFILE,
 		ip:      ip,
 		port:    8000,
 		dataGen: dg,
+	}
+	mode := os.Getenv("SERVER_MODE")
+	switch mode {
+	case "sendbuf":
+		svr.mode = common.MODE_SENDBUF
+	case "splice":
+		svr.mode = common.MODE_SPLICE
+	default:
+		svr.mode = common.MODE_SENDFILE
 	}
 
 	return svr, nil

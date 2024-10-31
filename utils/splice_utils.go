@@ -89,16 +89,15 @@ func PipeFile(r IsFile, offset int64, size int) (IsPipe, error) {
 
 func alignSize(size int) int {
 	pageSize := os.Getpagesize()
-	return size + pageSize - size%pageSize
+	return (size-1)/pageSize*pageSize + pageSize
 }
 
-func SpliceSendFile(conn net.Conn, file *os.File) error {
+func SpliceSendFile(conn net.Conn, file *os.File, size int) error {
 	syscallConn, ok := conn.(syscall.Conn)
 	if !ok {
 		return errors.New("conn is not a syscall.Conn")
 	}
 	reader := &File{F: file}
-	size := uint64(4 << 20)
 
 	pipe, err := PipeFile(reader, int64(0), int(size))
 	if err != nil {
@@ -115,12 +114,12 @@ func SpliceSendFile(conn net.Conn, file *os.File) error {
 	}
 	err = dstRawConn.Write(func(fd uintptr) (done bool) {
 		var n int
-		n, writeError = pipe.WriteTo(fd, int(size-written), splice.SPLICE_F_NONBLOCK|splice.SPLICE_F_MOVE)
+		n, writeError = pipe.WriteTo(fd, int(uint64(size)-written), splice.SPLICE_F_NONBLOCK|splice.SPLICE_F_MOVE)
 		if writeError != nil {
 			return writeError != syscall.EAGAIN && writeError != syscall.EINTR
 		}
 		written += uint64(n)
-		return written == size
+		return written == uint64(size)
 	})
 	if err == nil {
 		err = writeError

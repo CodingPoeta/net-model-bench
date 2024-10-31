@@ -1,6 +1,8 @@
 package datagen
 
 import (
+	"github.com/codingpoeta/net-model-bench/common"
+	"io"
 	"os"
 
 	"github.com/valyala/bytebufferpool"
@@ -13,7 +15,7 @@ type FileData struct {
 	fh       *os.File
 }
 
-func NewFileData(filename string) DataGen {
+func NewFileData(filename string) common.DataGen {
 	res := &FileData{
 		filename: filename,
 	}
@@ -32,13 +34,13 @@ func (m *FileData) Get(key string) []byte {
 	var len int64
 	switch key {
 	case "key0":
-		len = 1 << 10
+		len = 4 << 10
 	case "key1":
-		len = 1 << 20
+		len = 64 << 10
 	case "key2":
-		len = 2 << 20
+		len = 128 << 10
 	case "key3":
-		len = 3 << 20
+		len = 1 << 20
 	case "key4":
 		len = 4 << 20
 	}
@@ -65,16 +67,20 @@ func (m *FileData) Get(key string) []byte {
 	return buf.Bytes()
 }
 
+func (m *FileData) GetReader(key string) io.Reader {
+	panic("not implemented")
+}
+
 func (m *FileData) GetSize(key string) int {
 	switch key {
 	case "key0":
-		return 1 << 10
+		return 4 << 10
 	case "key1":
-		return 1 << 20
+		return 64 << 10
 	case "key2":
-		return 2 << 20
+		return 128 << 10
 	case "key3":
-		return 3 << 20
+		return 1 << 20
 	case "key4":
 		return 4 << 20
 	}

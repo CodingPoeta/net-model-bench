@@ -10,17 +10,9 @@ import (
 	"sync"
 )
 
-type servermode int
-
-const (
-	MODE_SENDBUF = iota
-	MODE_SENDFILE
-	MODE_SPLICE
-)
-
 type Server struct {
 	sync.Mutex
-	mode     servermode
+	mode     common.ServerMode
 	listener net.Listener
 	ip       string
 	port     int
@@ -65,13 +57,13 @@ func (s *Server) handle(conn net.Conn) {
 			break
 		}
 		switch s.mode {
-		case MODE_SENDBUF:
+		case common.MODE_SENDBUF:
 			buf := s.dataGen.Get("key4")
 			_, err = tcpConn.Write(buf)
-		case MODE_SENDFILE:
+		case common.MODE_SENDFILE:
 			_, err = tcpConn.ReadFrom(file)
-		case MODE_SPLICE:
-			err = utils.SpliceSendFile(tcpConn, file)
+		case common.MODE_SPLICE:
+			err = utils.SpliceSendFile(tcpConn, file, s.dataGen.GetSize("key4"))
 		}
 		file.Close()
 		if err != nil {
@@ -97,7 +89,7 @@ func NewServer(ip, iname string, dg common.DataGen) (common.BlockServer, error) 
 		return nil, err
 	}
 	svr := &Server{
-		mode:    MODE_SENDFILE,
+		mode:    common.MODE_SENDFILE,
 		ip:      ip,
 		port:    8000,
 		dataGen: dg,
@@ -105,11 +97,11 @@ func NewServer(ip, iname string, dg common.DataGen) (common.BlockServer, error) 
 	mode := os.Getenv("SERVER_MODE")
 	switch mode {
 	case "sendbuf":
-		svr.mode = MODE_SENDBUF
+		svr.mode = common.MODE_SENDBUF
 	case "splice":
-		svr.mode = MODE_SPLICE
+		svr.mode = common.MODE_SPLICE
 	default:
-		svr.mode = MODE_SENDFILE
+		svr.mode = common.MODE_SENDFILE
 	}
 
 	return svr, nil

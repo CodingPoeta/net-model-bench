@@ -13,6 +13,7 @@ import (
 
 type Server struct {
 	sync.Mutex
+	mode     common.ServerMode
 	listener net.Listener
 	ip       string
 	port     int
@@ -60,7 +61,15 @@ func (s *Server) handle(conn net.Conn) {
 			log.Println(err)
 			break
 		}
-		_, err = tcpConn.ReadFrom(file)
+		switch s.mode {
+		case common.MODE_SENDBUF:
+			buf := s.dataGen.Get(fmt.Sprintf("key%d", req.CMD))
+			_, err = tcpConn.Write(buf)
+		case common.MODE_SPLICE:
+			err = utils.SpliceSendFile(tcpConn, file, s.dataGen.GetSize(fmt.Sprintf("key%d", req.CMD)))
+		default:
+			_, err = tcpConn.ReadFrom(file)
+		}
 		file.Close()
 		if err != nil {
 			log.Println(err)
@@ -88,9 +97,19 @@ func NewServer(ip, iname string, dg common.DataGen) (common.BlockServer, error) 
 	}
 
 	svr := &Server{
+		mode:    common.MODE_SENDFILE,
 		ip:      ip,
 		port:    8000,
 		dataGen: dg,
+	}
+	mode := os.Getenv("SERVER_MODE")
+	switch mode {
+	case "sendbuf":
+		svr.mode = common.MODE_SENDBUF
+	case "splice":
+		svr.mode = common.MODE_SPLICE
+	default:
+		svr.mode = common.MODE_SENDFILE
 	}
 
 	return svr, nil
