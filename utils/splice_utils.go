@@ -19,6 +19,11 @@ type IsConn interface {
 	syscall.Conn
 }
 
+type IsBuffer interface {
+	io.Closer
+	Iovec() [][]byte
+}
+
 type IsPipe interface {
 	io.ReadCloser
 	ReadFd() (fd uintptr)
@@ -71,6 +76,29 @@ func (f *File) Close() error {
 	return f.F.Close()
 }
 
+type buffer []byte
+
+func (b *buffer) Iovec() [][]byte {
+	return [][]byte{*b}
+}
+
+func (b *buffer) Close() error {
+	return nil
+}
+
+func (b *buffer) Read(p []byte) (n int, err error) {
+	if len(*b) == 0 {
+		return 0, io.EOF
+	}
+	n = copy(p, *b)
+	if n < len(*b) {
+		*b = (*b)[n:]
+	} else {
+		*b = nil
+	}
+	return
+}
+
 func PipeFile(r IsFile, offset int64, size int) (IsPipe, error) {
 	pair, err := splice.Get()
 	if err != nil {
@@ -84,6 +112,66 @@ func PipeFile(r IsFile, offset int64, size int) (IsPipe, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "pair load file")
 	}
+	return &Pipe{pair: pair}, nil
+}
+
+func PipeConn(r IsConn, size int) (IsPipe, error) {
+	pair, err := splice.Get()
+	if err != nil {
+		return nil, errors.Wrap(err, "get pipe pair")
+	}
+	err = pair.Grow(alignSize(size))
+	if err != nil {
+		return nil, errors.Wrap(err, "grow pipe pair")
+	}
+
+	rawConn, err := r.SyscallConn()
+	if err != nil {
+		return nil, errors.Wrap(err, "get raw conn")
+	}
+
+	loaded := 0
+	var loadError error
+
+	err = rawConn.Read(func(fd uintptr) (done bool) {
+		var n int
+		n, loadError = pair.LoadFrom(fd, size-loaded, splice.SPLICE_F_NONBLOCK|splice.SPLICE_F_MOVE)
+		if loadError != nil {
+			return loadError != syscall.EAGAIN && loadError != syscall.EINTR
+		}
+		loaded += n
+		return loaded == size
+	})
+
+	if err == nil {
+		err = loadError
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "pair load file")
+	}
+	return &Pipe{pair: pair}, nil
+}
+
+func PipeBuffer(r IsBuffer, size int) (IsPipe, error) {
+	pair, err := splice.Get()
+	if err != nil {
+		return nil, errors.Wrap(err, "get pipe pair")
+	}
+	err = pair.Grow(alignSize(size))
+	if err != nil {
+		return nil, errors.Wrap(err, "grow pipe pair")
+	}
+
+	for _, slice := range r.Iovec() {
+		// TODO: use vmsplice to load buffer
+		// There is a bug in vmsplice, it will cause data corruption
+		// _, err = pair.LoadBuffer(r.Iovec(), size, splice.SPLICE_F_GIFT)
+		_, err = syscall.Write(int(pair.WriteFd()), slice)
+		if err != nil {
+			return nil, errors.Wrap(err, "pair load buffer")
+		}
+	}
+
 	return &Pipe{pair: pair}, nil
 }
 
