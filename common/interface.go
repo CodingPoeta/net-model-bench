@@ -15,7 +15,7 @@ type BlockClient interface {
 
 type DataGen interface {
 	Get(key string) []byte
-	GetReader(key string) io.Reader
+	GetReadCloser(key string) io.ReadCloser
 	GetSize(key string) int
 }
 

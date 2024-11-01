@@ -36,8 +36,8 @@ func (m *MemData) Get(key string) []byte {
 	return m.data[key]
 }
 
-func (m *MemData) GetReader(key string) io.Reader {
-	return bytes.NewReader(m.Get(key))
+func (m *MemData) GetReadCloser(key string) io.ReadCloser {
+	return io.NopCloser(bytes.NewReader(m.Get(key)))
 }
 
 func (m *MemData) GetSize(key string) int {

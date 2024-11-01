@@ -4,3 +4,4 @@ bench
 .idea
 .vscode
 bin/
+data/

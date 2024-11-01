@@ -44,8 +44,6 @@ func (s *Server) Serve() (err error) {
 	return err
 }
 
-const basepath = "./data/file"
-
 func (s *Server) handle(conn net.Conn) {
 	tcpConn := conn.(*net.TCPConn)
 	defer tcpConn.Close()
@@ -55,22 +53,21 @@ func (s *Server) handle(conn net.Conn) {
 			log.Println(err)
 			break
 		}
-		path := fmt.Sprintf("%s%d", basepath, req.CMD)
-		file, err := os.OpenFile(path, os.O_RDONLY, 0)
-		if err != nil {
-			log.Println(err)
-			break
-		}
+		var err error
+		key := fmt.Sprintf("key%d", req.CMD)
 		switch s.mode {
 		case common.MODE_SENDBUF:
-			buf := s.dataGen.Get(fmt.Sprintf("key%d", req.CMD))
+			buf := s.dataGen.Get(key)
 			_, err = tcpConn.Write(buf)
 		case common.MODE_SPLICE:
-			err = utils.SpliceSendFile(tcpConn, file, s.dataGen.GetSize(fmt.Sprintf("key%d", req.CMD)))
+			reader := s.dataGen.GetReadCloser(key)
+			err = utils.SpliceSendFile(tcpConn, reader.(*os.File), s.dataGen.GetSize(fmt.Sprintf("key%d", req.CMD)))
+			reader.Close()
 		default:
-			_, err = tcpConn.ReadFrom(file)
+			reader := s.dataGen.GetReadCloser(key)
+			_, err = tcpConn.ReadFrom(s.dataGen.GetReadCloser(key))
+			reader.Close()
 		}
-		file.Close()
 		if err != nil {
 			log.Println(err)
 			break
@@ -82,15 +79,6 @@ func (s *Server) Close() {
 }
 
 func NewServer(ip, iname string, dg common.DataGen) (common.BlockServer, error) {
-	for i := 0; i < 5; i++ {
-		file, err := os.Create(fmt.Sprintf("%s%d", basepath, i))
-		if err != nil {
-			return nil, err
-		}
-		file.Write(dg.Get(fmt.Sprintf("key%d", i)))
-		file.Close()
-	}
-
 	ip, err := utils.FindLocalIP(ip, iname)
 	if err != nil {
 		return nil, err

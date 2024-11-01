@@ -1,6 +1,7 @@
 module github.com/codingpoeta/net-model-bench
 
 require (
+	github.com/hexilee/iorpc v0.0.0-20221111023153-6594c32b0c69
 	github.com/juicedata/juicefs v1.1.2
 	github.com/panjf2000/gnet v1.6.7
 	github.com/pkg/errors v0.9.1
@@ -21,7 +22,6 @@ require (
 	github.com/hungys/go-lz4 v0.0.0-20170805124057-19ff7f07f099 // indirect
 	github.com/onsi/ginkgo/v2 v2.9.5 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/stretchr/testify v1.8.0 // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/mock v0.4.0 // indirect
@@ -39,6 +39,8 @@ require (
 )
 
 replace github.com/urfave/cli/v2 v2.25.3 => github.com/juicedata/cli/v2 v2.25.4-0.20230526070816-8aff66437fa8
+
+replace github.com/hexilee/iorpc v0.0.0-20221111023153-6594c32b0c69 => github.com/winglq/iorpc v0.0.0-20241031081100-1cf621e6c358
 
 replace github.com/codingpoeta/net-model-bench => ./
 

@@ -13,6 +13,7 @@ import (
 	"github.com/codingpoeta/net-model-bench/pkg/datagen"
 	"github.com/codingpoeta/net-model-bench/pkg/net/gorpc"
 	"github.com/codingpoeta/net-model-bench/pkg/net/grpc"
+	"github.com/codingpoeta/net-model-bench/pkg/net/iorpc"
 	"github.com/codingpoeta/net-model-bench/pkg/net/jnet"
 	"github.com/codingpoeta/net-model-bench/pkg/net/perf"
 	"github.com/codingpoeta/net-model-bench/pkg/net/quic"
@@ -38,13 +39,13 @@ func cmdServer() *cli.Command {
 			case "gorpc":
 				svr, err = gorpc.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
 			case "tcpsendfile":
-				svr, err = tcpsendfile.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
+				svr, err = tcpsendfile.NewServer(c.String("ip"), c.String("network"), datagen.NewFileData("./data/"))
 			case "perf":
 				svr, err = perf.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
 			case "jnet":
 				svr, err = jnet.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
 			case "iorpc":
-			// svr, err = iorpc.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
+				svr, err = iorpc.NewServer(c.String("ip"), c.String("network"), datagen.NewFileData("./data/"))
 			case "quic":
 				svr, err = quic.NewServer(c.String("ip"), c.String("network"), datagen.NewMemData())
 			default:
@@ -80,9 +81,9 @@ func cmdClient() *cli.Command {
 		Usage:    "client",
 		Category: "category2",
 		Action: func(c *cli.Context) error {
-			tps := c.Int("threads-per-con")
-			if tps == 0 {
-				tps = 1
+			tpc := c.Int("threads-per-con")
+			if tpc == 0 {
+				tpc = 1
 			}
 			batch := c.Int("batch")
 			if batch == 0 {
@@ -98,7 +99,7 @@ func cmdClient() *cli.Command {
 			var err error
 			switch c.String("mode") {
 			case "grpc":
-				cli = grpc.NewClient(c.String("addr"), tps, int(threads/tps))
+				cli = grpc.NewClient(c.String("addr"), tpc, int(threads/tpc))
 			case "gorpc":
 				cli = gorpc.NewClient(c.String("addr"), threads)
 			case "jnet":
@@ -106,7 +107,8 @@ func cmdClient() *cli.Command {
 				if err != nil {
 					panic(err)
 				}
-			case "iorpc": // TODO
+			case "iorpc":
+				cli = iorpc.NewClient(c.String("addr"), int(threads/tpc))
 			case "tcpsendfile":
 				cli = tcpsendfile.NewClient(c.String("addr"), threads, datagen.NewMemData())
 			case "perf":
