@@ -2,7 +2,6 @@ package iorpc
 
 import (
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
@@ -17,10 +16,12 @@ type Client struct {
 
 func NewClient(addr string, conns int) *Client {
 	NewDispatcherForClient()
+	iorpc.RegisterHeaders(func() iorpc.Headers {
+		return new(ReadHeaders)
+	})
 	c := iorpc.NewTCPClient(addr)
 	c.DisableCompression = true
 	c.Conns = conns
-	c.CloseBody = true
 	c.Start()
 	return &Client{
 		addr: addr,
@@ -42,13 +43,6 @@ var payloadBufPool = &sync.Pool{
 
 func (c *Client) Get(req_ common.Request) (*common.Response, error) {
 	var res common.Response
-	payloadBuf := payloadBufPool.Get().(*common.BodyBuffer)
-	payloadBuf.Release = func() {
-		payloadBufPool.Put(payloadBuf)
-	}
-	res.Body = payloadBuf.Buf
-	res.BB = payloadBuf
-	res.BB.Inc()
 
 	req := iorpc.Request{
 		Service: ServiceReadData,
@@ -61,15 +55,11 @@ func (c *Client) Get(req_ common.Request) (*common.Response, error) {
 		fmt.Printf("call error: %v\n", err)
 		return nil, err
 	}
-	_, err = io.ReadFull(resp.Body.Reader, res.Body[:resp.Body.Size])
-	if err != nil {
-		fmt.Printf("read error: %v\n", err)
-		return nil, err
+
+	if buf, ok := resp.Body.Reader.(iorpc.Buffer); ok {
+		res.Body = buf.Bytes()
+		res.Size = uint32(len(res.Body))
 	}
 
-	return &common.Response{
-		Body: res.Body,
-		Size: uint32(len(res.Body)),
-		BB:   res.BB,
-	}, err
+	return &res, err
 }

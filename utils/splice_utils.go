@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"github.com/codingpoeta/net-model-bench/utils/splice"
+	"github.com/hanwen/go-fuse/v2/splice"
 	"github.com/pkg/errors"
 	"io"
 	"net"
@@ -27,7 +27,7 @@ type IsBuffer interface {
 type IsPipe interface {
 	io.ReadCloser
 	ReadFd() (fd uintptr)
-	WriteTo(fd uintptr, n int, flags int) (int, error)
+	WriteTo(fd uintptr, n int) (int, error)
 }
 
 type Pipe struct {
@@ -38,11 +38,11 @@ func (p *Pipe) ReadFd() uintptr {
 	return p.pair.ReadFd()
 }
 
-func (p *Pipe) WriteTo(fd uintptr, n int, flags int) (int, error) {
+func (p *Pipe) WriteTo(fd uintptr, n int) (int, error) {
 	if p.pair == nil {
 		return 0, io.EOF
 	}
-	return p.pair.WriteTo(fd, n, flags)
+	return p.pair.WriteTo(fd, n)
 }
 
 func (p *Pipe) Read(b []byte) (int, error) {
@@ -108,7 +108,7 @@ func PipeFile(r IsFile, offset int64, size int) (IsPipe, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "grow pipe pair")
 	}
-	_, err = pair.LoadFromAt(r.File(), size, &offset, splice.SPLICE_F_MOVE)
+	_, err = pair.LoadFromAt(r.File(), size, offset)
 	if err != nil {
 		return nil, errors.Wrap(err, "pair load file")
 	}
@@ -135,7 +135,7 @@ func PipeConn(r IsConn, size int) (IsPipe, error) {
 
 	err = rawConn.Read(func(fd uintptr) (done bool) {
 		var n int
-		n, loadError = pair.LoadFrom(fd, size-loaded, splice.SPLICE_F_NONBLOCK|splice.SPLICE_F_MOVE)
+		n, loadError = pair.LoadFrom(fd, size-loaded)
 		if loadError != nil {
 			return loadError != syscall.EAGAIN && loadError != syscall.EINTR
 		}
@@ -202,7 +202,7 @@ func SpliceSendFile(conn net.Conn, file *os.File, size int) error {
 	}
 	err = dstRawConn.Write(func(fd uintptr) (done bool) {
 		var n int
-		n, writeError = pipe.WriteTo(fd, int(uint64(size)-written), splice.SPLICE_F_NONBLOCK|splice.SPLICE_F_MOVE)
+		n, writeError = pipe.WriteTo(fd, int(uint64(size)-written))
 		if writeError != nil {
 			return writeError != syscall.EAGAIN && writeError != syscall.EINTR
 		}

@@ -2,9 +2,10 @@ package iorpc
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/codingpoeta/net-model-bench/common"
 	"github.com/hexilee/iorpc"
-	"os"
 )
 
 var (
@@ -38,7 +39,7 @@ func addServiceReadData(dispatcher *iorpc.Dispatcher, dg common.DataGen) {
 			request.Body.Close()
 			cmd := uint64(4)
 			if request.Headers != nil {
-				fmt.Println("request.Headers", request.Headers)
+				// fmt.Println("request.Headers", request.Headers)
 				cmd = request.Headers.(*ReadHeaders).CMD
 			}
 			size := uint64(dg.GetSize(fmt.Sprintf("key%d", cmd)))
@@ -46,7 +47,7 @@ func addServiceReadData(dispatcher *iorpc.Dispatcher, dg common.DataGen) {
 
 			if request.Headers != nil {
 				if headers := request.Headers.(*ReadHeaders); headers != nil {
-					size = headers.Size
+					// size = headers.Size
 					offset = headers.Offset
 					cmd = headers.CMD
 				}

@@ -1,6 +1,7 @@
 module github.com/codingpoeta/net-model-bench
 
 require (
+	github.com/hanwen/go-fuse/v2 v2.1.1-0.20210611132105-24a1dfe6b4f8
 	github.com/hexilee/iorpc v0.0.0-20221111023153-6594c32b0c69
 	github.com/juicedata/juicefs v1.1.2
 	github.com/panjf2000/gnet v1.6.7
@@ -40,7 +41,7 @@ require (
 
 replace github.com/urfave/cli/v2 v2.25.3 => github.com/juicedata/cli/v2 v2.25.4-0.20230526070816-8aff66437fa8
 
-replace github.com/hexilee/iorpc v0.0.0-20221111023153-6594c32b0c69 => github.com/winglq/iorpc v0.0.0-20241031081100-1cf621e6c358
+replace github.com/hexilee/iorpc v0.0.0-20221111023153-6594c32b0c69 => github.com/winglq/iorpc v0.0.0-20241031025143-df0cab627377
 
 replace github.com/codingpoeta/net-model-bench => ./
 
