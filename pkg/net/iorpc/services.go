@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/codingpoeta/net-model-bench/common"
-	"github.com/hexilee/iorpc"
+	"github.com/codingpoeta/net-model-bench/pkg/iorpc"
 )
 
 var (

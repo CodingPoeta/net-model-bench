@@ -2,10 +2,11 @@ package iorpc
 
 import (
 	"fmt"
-	"github.com/codingpoeta/net-model-bench/common"
-	"github.com/codingpoeta/net-model-bench/utils"
-	"github.com/hexilee/iorpc"
 	"time"
+
+	"github.com/codingpoeta/net-model-bench/common"
+	"github.com/codingpoeta/net-model-bench/pkg/iorpc"
+	"github.com/codingpoeta/net-model-bench/utils"
 )
 
 type Server struct {
