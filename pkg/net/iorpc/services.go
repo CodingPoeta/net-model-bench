@@ -38,26 +38,39 @@ func addServiceReadData(dispatcher *iorpc.Dispatcher, dg common.DataGen) {
 		func(clientAddr string, request iorpc.Request) (*iorpc.Response, error) {
 			request.Body.Close()
 			cmd := uint64(4)
-			if request.Headers != nil {
-				// fmt.Println("request.Headers", request.Headers)
-				cmd = request.Headers.(*ReadHeaders).CMD
-			}
+			ID := uint64(0)
 			size := uint64(dg.GetSize(fmt.Sprintf("key%d", cmd)))
 			offset := uint64(0)
-
 			if request.Headers != nil {
 				if headers := request.Headers.(*ReadHeaders); headers != nil {
-					// size = headers.Size
+					// fmt.Println("request.Headers", request.Headers)
+					ID = headers.ID
 					offset = headers.Offset
 					cmd = headers.CMD
+					size = uint64(dg.GetSize(fmt.Sprintf("key%d", cmd)))
+					if headers.Size > 0 {
+						size = headers.Size
+					}
 				}
 			}
-
+			// fmt.Println("----------reqID:  ", ID)
+			var data *File
+			if cmd == 4 {
+				data = &File{file: dg.GetReadCloser(fmt.Sprintf("key%d-%d", cmd, ID)).(*os.File)}
+			} else {
+				data = &File{file: dg.GetReadCloser(fmt.Sprintf("key%d", cmd)).(*os.File)}
+			}
 			return &iorpc.Response{
+				Headers: &ReadHeaders{
+					CMD:    cmd,
+					Offset: offset,
+					Size:   size,
+					ID:     ID,
+				},
 				Body: iorpc.Body{
 					Offset:   offset,
 					Size:     size,
-					Reader:   &File{file: dg.GetReadCloser(fmt.Sprintf("key%d", cmd)).(*os.File)},
+					Reader:   data,
 					NotClose: true,
 				},
 			}, nil

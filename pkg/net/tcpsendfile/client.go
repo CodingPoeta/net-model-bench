@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/codingpoeta/net-model-bench/common"
+	"github.com/codingpoeta/net-model-bench/pkg/iorpc"
 )
 
 type request struct {
@@ -89,6 +90,8 @@ func (c *Client) Close() {
 	close(c.conns)
 }
 
+var staticBuf = make([]byte, 5120*1024)
+
 var payloadBufPool = &sync.Pool{
 	New: func() any {
 		return &common.BodyBuffer{
@@ -107,14 +110,25 @@ func (c *Client) Get(req_ common.Request) (*common.Response, error) {
 	res.BB = payloadBuf
 	res.BB.Inc()
 
-	err := c.withConn(func(conn net.Conn) error {
+	err := c.withConn(func(conn net.Conn) (err error) {
 		req := request{Request: req_}
 		// fmt.Println("CMD:", req.CMD, "Key:", req.Key)
-		if err := req.Write(conn); err != nil {
+		if err = req.Write(conn); err != nil {
 			fmt.Println("write error:", err)
 			return err
 		}
-		n, err := io.ReadFull(conn, res.Body[:c.dg.GetSize(fmt.Sprintf("%s%d", "key", req.CMD))])
+		var n int
+		r, ok := conn.(iorpc.IsConn)
+		if ok {
+			n = int(c.dg.GetSize(fmt.Sprintf("%s%d", "key", req.CMD)))
+			_, err_ := iorpc.PipeConn(r, n)
+			err = err_
+			// defer p.Close()
+			res.Body = staticBuf[:n]
+		}
+		if !ok || err != nil {
+			n, err = io.ReadFull(conn, res.Body[:c.dg.GetSize(fmt.Sprintf("%s%d", "key", req.CMD))])
+		}
 		if err != nil {
 			fmt.Println("read error:", err)
 			return err
