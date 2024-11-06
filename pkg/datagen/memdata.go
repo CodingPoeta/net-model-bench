@@ -2,11 +2,13 @@ package datagen
 
 import (
 	"bytes"
-	"github.com/codingpoeta/net-model-bench/common"
 	"io"
-	"math/rand"
+	"strconv"
+	"strings"
 
+	"github.com/codingpoeta/net-model-bench/common"
 	"github.com/codingpoeta/net-model-bench/utils"
+	"golang.org/x/exp/rand"
 )
 
 type MemData struct {
@@ -18,6 +20,12 @@ func NewMemData() common.DataGen {
 
 	for i := 0; i < 1<<24; i++ {
 		buf[i] = utils.Letters[rand.Intn(len(utils.Letters))]
+	}
+	for i := 0; i < 1<<17; i++ {
+		for j := 0; j < 1<<4; j++ {
+			io.WriteString(bytes.NewBuffer(buf[i<<7+j<<3:i<<7+j<<3]), "55AA5aa")
+			buf[i<<7+j<<3+7] = byte(j)
+		}
 	}
 
 	res := &MemData{
@@ -33,7 +41,37 @@ func NewMemData() common.DataGen {
 }
 
 func (m *MemData) Get(key string) []byte {
-	return m.data[key]
+	res, ok := m.data[key]
+	if ok {
+		return res
+	}
+	s := strings.Split(key, "-")
+	id, err := strconv.Atoi(s[1])
+	if err != nil {
+		panic(err)
+	}
+
+	var size int
+	switch s[0] {
+	case "key4":
+		size = 1 << 22 // 4MiB
+	case "key3":
+		size = 1 << 20 // 1MiB
+	case "key2":
+		size = 1 << 17 // 128KiB
+	case "key1":
+		size = 1 << 16 // 64KiB
+	default:
+		size = 1 << 12 // 4KiB
+	}
+	buf := make([]byte, size)
+	for i := 0; i < size>>7; i++ {
+		for j := 0; j < 1<<4; j++ {
+			io.WriteString(bytes.NewBuffer(buf[i<<7+j<<3:i<<7+j<<3]), "55AA5aa")
+			buf[i<<7+j<<3+7] = byte(id)
+		}
+	}
+	return buf
 }
 
 func (m *MemData) GetReadCloser(key string) io.ReadCloser {

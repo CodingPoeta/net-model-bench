@@ -2,9 +2,10 @@ package datagen
 
 import (
 	"fmt"
-	"github.com/codingpoeta/net-model-bench/common"
 	"io"
 	"os"
+
+	"github.com/codingpoeta/net-model-bench/common"
 
 	"github.com/valyala/bytebufferpool"
 )
@@ -26,6 +27,22 @@ func NewFileData(basePath string) common.DataGen {
 		}
 		file.Write(NewMemData().Get(fmt.Sprintf("key%d", i)))
 		file.Close()
+	}
+	for k := 0; k < 5; k++ {
+		for id := 1; id <= 50; id++ {
+			if _, err := os.Stat(fmt.Sprintf("%s/key%d-%d", basePath, k, id)); os.IsNotExist(err) {
+			} else if err != nil {
+				panic(err)
+			} else {
+				continue
+			}
+			file, err := os.Create(fmt.Sprintf("%s/key%d-%d", basePath, k, id))
+			if err != nil {
+				panic(err)
+			}
+			file.Write(NewMemData().Get(fmt.Sprintf("key%d-%d", k, id)))
+			file.Close()
+		}
 	}
 	return res
 }
