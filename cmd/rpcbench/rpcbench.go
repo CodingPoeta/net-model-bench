@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	_ "net/http/pprof"
+
 	"github.com/codingpoeta/net-model-bench/common"
 	"github.com/codingpoeta/net-model-bench/pkg/datagen"
 	"github.com/codingpoeta/net-model-bench/pkg/net/gorpc"
@@ -20,7 +22,6 @@ import (
 	"github.com/codingpoeta/net-model-bench/pkg/net/tcppool"
 	"github.com/codingpoeta/net-model-bench/pkg/net/tcpsendfile"
 	"github.com/urfave/cli/v2"
-	_ "net/http/pprof"
 )
 
 var debugPort = 6060
