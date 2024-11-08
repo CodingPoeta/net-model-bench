@@ -85,15 +85,20 @@ func PipeConn(r IsConn, size int) (IsPipe, error) {
 	err = rawConn.Read(func(fd uintptr) (done bool) {
 		var n int
 		for {
+			var syserr *os.SyscallError
 			n, eno = pair.LoadFrom(fd, size-loaded)
-			if eno != nil {
-				if eno == syscall.EINTR {
+			syserr, _ = eno.(*os.SyscallError)
+			if syserr != nil {
+				if syserr.Err == syscall.EINTR {
 					continue
 				}
-				return eno != syscall.EAGAIN
+				return syserr.Err != syscall.EAGAIN
 			}
 			loaded += n
-			return loaded == size
+			if loaded < size {
+				continue
+			}
+			return true
 		}
 	})
 
@@ -215,15 +220,20 @@ func (b *Body) spliceTo(w io.Writer) (bool, error) {
 	err = dstRawConn.Write(func(fd uintptr) (done bool) {
 		var n int
 		for {
+			var syserr *os.SyscallError
 			n, eno = pipe.WriteTo(fd, int(b.Size)-written)
-			if eno != nil {
-				if eno == syscall.EINTR {
+			syserr, _ = eno.(*os.SyscallError)
+			if syserr != nil {
+				if syserr.Err == syscall.EINTR {
 					continue
 				}
-				return eno != syscall.EAGAIN
+				return syserr.Err != syscall.EAGAIN
 			}
 			written += n
-			return written == int(b.Size)
+			if written < int(b.Size) {
+				continue
+			}
+			return true
 		}
 	})
 	if err == nil {
